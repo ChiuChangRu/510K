@@ -449,12 +449,13 @@ async function searchCodes() {
       const data = await res.json();
       const name = data.results?.[0]?.device_name || kw;
       const cls = data.results?.[0]?.device_class || "?";
+      const zhDirect = ZH_MAP[kw] || "";
       const el = document.createElement("div");
       el.className = "result-item selected";
-      el.innerHTML = `<span class="code">${kw}</span><span class="name">${name}</span><span class="cls">Class ${cls}</span>`;
+      el.innerHTML = `<span class="code">${kw}</span><span class="name">${name}${zhDirect ? `<span class="zh-tag">${zhDirect}</span>` : ""}</span><span class="cls">Class ${cls}</span>`;
       el.onclick = () => selectCode(kw, name, el);
       $("code-list").appendChild(el);
-      setStatus("code-status", `Product Code ${kw} — 點選後載入清單`);
+      setStatus("code-status", `Product Code ${kw}${zhDirect ? ` — ${zhDirect}` : ""}`);
       selectCode(kw, name, el);
     } catch(e) { setStatus("code-status", "查詢失敗：" + e.message, "err"); }
     return;
@@ -642,13 +643,23 @@ function clearCompanyFilter() {
 
 const zhNameCache = {};
 
+function normalizeDeviceName(name) {
+  // FDA often uses "NEEDLE, ASPIRATION BIOPSY" format — reorder to natural English
+  name = name.replace(/[™®©]/g, "").trim();
+  // If starts with a single word followed by comma, reorder: "NEEDLE, BIOPSY" -> "BIOPSY NEEDLE"
+  const commaMatch = name.match(/^([A-Z]+),\s+(.+)$/);
+  if (commaMatch) return `${commaMatch[2]} ${commaMatch[1]}`.toLowerCase();
+  return name;
+}
+
 async function myMemoryTranslate(text) {
+  const normalized = normalizeDeviceName(text);
   try {
-    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 200))}&langpair=en|zh-TW`);
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized.substring(0, 200))}&langpair=en|zh-TW`);
     const d = await r.json();
     if (d.responseStatus === 200) {
       const t = (d.responseData?.translatedText || "").trim();
-      if (t && !/PLEASE SELECT|MYMEMORY/i.test(t)) return t;
+      if (t && !/PLEASE SELECT|MYMEMORY|Usage/i.test(t)) return t;
     }
   } catch(e) {}
   return "";
