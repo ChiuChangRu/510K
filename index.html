@@ -344,6 +344,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 <script>
 // ─── Config ───────────────────────────────────────────────
 const OPENFDA = "https://api.fda.gov";
+const PROXY_TOKEN = "8b325dace88768357cc3bd947ff68f2d91c4d1942fc3d861";
 let selectedCode = null;
 let kData = [];
 let kPage = 0;
@@ -401,6 +402,26 @@ async function searchCodes() {
   if (!kw) return;
   $("code-list").innerHTML = "";
 
+  // Direct product code input (3 uppercase letters)
+  if (/^[A-Z]{3}$/.test(kw)) {
+    setStatus("code-status", `直接以 Product Code ${kw} 查詢…`);
+    try {
+      const url = `${OPENFDA}/device/classification.json?search=product_code:"${kw}"&limit=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const name = data.results?.[0]?.device_name || kw;
+      const cls = data.results?.[0]?.device_class || "?";
+      const el = document.createElement("div");
+      el.className = "result-item selected";
+      el.innerHTML = `<span class="code">${kw}</span><span class="name">${name}</span><span class="cls">Class ${cls}</span>`;
+      el.onclick = () => selectCode(kw, name, el);
+      $("code-list").appendChild(el);
+      setStatus("code-status", `Product Code ${kw} — 點選後載入清單`);
+      selectCode(kw, name, el);
+    } catch(e) { setStatus("code-status", "查詢失敗：" + e.message, "err"); }
+    return;
+  }
+
   // Translate if Chinese
   if (isChinese(kw)) {
     const key = getKey();
@@ -414,10 +435,10 @@ async function searchCodes() {
   }
 
   try {
-    // Run fuzzy search
+    // Run fuzzy AND search
     const results = await fdaClassSearch(kw);
 
-    // If no results and multi-word, try each word alone and merge
+    // Fallback: each word separately, merge results
     let merged = results;
     if (!merged.length) {
       const words = kw.split(/\s+/).filter(w => w.length > 2);
@@ -585,7 +606,7 @@ function kToPdfUrl(knum) {
 
 async function analyzeViaPdf(knum, item, key, proxy, card) {
   // 1. Fetch PDF via proxy
-  const pdfBytes = await fetch(`${proxy}/pdf?k=${knum}`).then(async r => {
+  const pdfBytes = await fetch(`${proxy}/pdf?k=${knum}`, { headers: { "X-FDA-Token": PROXY_TOKEN } }).then(async r => {
     if (!r.ok) throw new Error(`Proxy returned ${r.status}`);
     return r.arrayBuffer();
   });
