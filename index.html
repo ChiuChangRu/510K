@@ -189,6 +189,14 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 /* Export */
 .export-row { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 
+/* Company filter chips */
+.company-chip { font-size: 12px; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text2); cursor: pointer; transition: all 0.1s; }
+.company-chip:hover { border-color: var(--teal-border); color: var(--teal); }
+.company-chip.active { background: var(--teal-light); border-color: var(--teal-border); color: var(--teal); font-weight: 500; }
+
+/* Chinese tag on result items */
+.zh-tag { font-size: 11px; color: var(--text3); margin-left: 6px; }
+
 /* Responsive */
 @media (max-width: 700px) {
   .shell { grid-template-columns: 1fr; }
@@ -290,22 +298,30 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
     <!-- Step 2 -->
     <div class="panel" id="panel2" style="opacity:0.45; pointer-events:none;">
       <div class="panel-title">Step 2 — 510(k) 清單 <span class="chip teal" id="selected-chip" style="display:none;"></span></div>
-      <div class="k-toolbar">
-        <select id="year-sel">
-          <option value="">所有年份</option>
-          <option value="2025">2025</option>
-          <option value="2024">2024</option>
-          <option value="2023">2023</option>
-          <option value="2022">2022</option>
-          <option value="2021">2021</option>
-          <option value="2020">2020</option>
-          <option value="2019">2019</option>
-          <option value="2018">2018</option>
-          <option value="2015">2015–2017</option>
-          <option value="2010">2010–2014</option>
+      <div class="k-toolbar" style="flex-wrap:wrap; gap:8px;">
+        <select id="year-sel" onchange="toggleCustomYear()">
+          <option value="3">近 3 年</option>
+          <option value="5" selected>近 5 年</option>
+          <option value="10">近 10 年</option>
+          <option value="all">所有年份</option>
+          <option value="custom">自訂範圍</option>
         </select>
+        <span id="custom-year-wrap" style="display:none; align-items:center; gap:4px;">
+          <input type="number" id="year-from" placeholder="起始年" min="1976" max="2025" style="width:80px; padding:7px 8px; font-size:13px;" />
+          <span style="font-size:13px; color:var(--text2);">—</span>
+          <input type="number" id="year-to" placeholder="結束年" min="1976" max="2025" style="width:80px; padding:7px 8px; font-size:13px;" />
+        </span>
         <button id="btn-load" onclick="loadKList()">載入清單</button>
         <span class="chip" id="k-total-chip" style="display:none;"></span>
+      </div>
+      <div id="company-filter-wrap" style="display:none; margin-bottom:10px;">
+        <div style="font-size:12px; color:var(--text3); margin-bottom:6px; font-weight:500; letter-spacing:0.04em; text-transform:uppercase;">廠商篩選（可複選）</div>
+        <div id="company-chips" style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px;"></div>
+        <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+          <input type="text" id="company-custom" placeholder="手動輸入廠商名稱…" style="font-size:13px; flex:1;" oninput="filterByCompany()" />
+          <button onclick="clearCompanyFilter()" style="font-size:12px; padding:5px 10px;">清除篩選</button>
+        </div>
+        <div style="font-size:11px; color:var(--text3); margin-top:4px;" id="filter-count"></div>
       </div>
       <div class="k-list" id="k-list"></div>
       <div class="pagination" id="k-pages" style="display:none;">
@@ -363,6 +379,27 @@ function unlockPanel(id) {
 }
 function getKey() { return $("api-key").value.trim(); }
 function getProxy() { return ($("proxy-url").value.trim()).replace(/\/$/, ""); }
+
+// ─── Chinese device name map ──────────────────────────────
+const ZH_MAP = {
+  "FCG":"活體切片針","KNW":"抽吸活體切片針","POZ":"活體切片針套組",
+  "OIJ":"活體切片針引導套組","NLK":"心血管活體切片針（再處理）",
+  "DMO":"心血管活體切片針","FRN":"親水性導管","KZH":"親水性導管",
+  "GEI":"血液透析導管","OZO":"血液透析導管","KYH":"腹腔鏡穿刺器",
+  "GEL":"穿刺器","FMF":"引流導管","GZF":"引流導管","FTR":"尿道導管",
+  "KZG":"尿道導管","FRO":"血管導管","GCG":"中心靜脈導管",
+  "KON":"中心靜脈導管","GEH":"導絲","KJD":"導絲","GCH":"擴張器",
+  "KYD":"擴張器","FYL":"注射針","KYK":"注射針","GCL":"手術縫線",
+  "FRH":"手術縫合針","GEK":"手術刀片","KYL":"手術電燒筆",
+  "GEJ":"電燒切除器","FTL":"內視鏡夾","GZG":"內視鏡夾",
+  "GEF":"血管支架","KYG":"冠狀動脈支架","FYN":"骨科螺釘",
+  "KYN":"骨科螺釘","GEG":"骨科接骨板","KYO":"骨科接骨板",
+  "FYO":"髖關節假體","KYP":"膝關節假體","GEI":"心律調節器導線",
+  "FYP":"心律調節器","KZH":"除顫器","GEL":"體外震波碎石探頭",
+  "FRN":"超音波探頭","KZG":"內視鏡","GCG":"腹腔鏡","FTR":"胃鏡",
+  "KZH":"大腸鏡","GEH":"支氣管鏡","KYH":"血糖儀","GCH":"血壓計",
+  "FYL":"脈搏血氧計","KYK":"體溫計","GCL":"心電圖儀"
+};
 
 // ─── Step 1: Product Code Search ──────────────────────────
 function isChinese(str) { return /[\u4e00-\u9fff]/.test(str); }
@@ -451,9 +488,10 @@ async function searchCodes() {
     const seen = new Map();
     merged.forEach(r => { if (!seen.has(r.product_code)) seen.set(r.product_code, r); });
     seen.forEach((r, code) => {
+      const zh = ZH_MAP[code] || "";
       const el = document.createElement("div");
       el.className = "result-item";
-      el.innerHTML = `<span class="code">${code}</span><span class="name">${r.device_name}</span><span class="cls">Class ${r.device_class || "?"}</span>`;
+      el.innerHTML = `<span class="code">${code}</span><span class="name">${r.device_name}${zh ? `<span class="zh-tag">／${zh}</span>` : ""}</span><span class="cls">Class ${r.device_class || "?"}</span>`;
       el.onclick = () => selectCode(code, r.device_name, el);
       $("code-list").appendChild(el);
     });
@@ -476,27 +514,55 @@ function selectCode(code, name, el) {
 }
 
 // ─── Step 2: 510(k) List ──────────────────────────────────
+const TOP15 = [
+  "Boston Scientific","Medtronic","Johnson & Johnson","Abbott",
+  "Siemens Healthineers","Philips","Becton Dickinson","Stryker",
+  "Zimmer Biomet","Edwards Lifesciences","Baxter","Cook Medical",
+  "Teleflex","Argon Medical","Merit Medical"
+];
+let kDataAll = []; // unfiltered full set
+let activeCompanies = new Set();
+
+function toggleCustomYear() {
+  const v = $("year-sel").value;
+  const wrap = $("custom-year-wrap");
+  wrap.style.display = v === "custom" ? "inline-flex" : "none";
+}
+
+function getYearRange() {
+  const v = $("year-sel").value;
+  const now = new Date().getFullYear();
+  if (v === "all") return null;
+  if (v === "custom") {
+    const from = parseInt($("year-from").value) || 2000;
+    const to = parseInt($("year-to").value) || now;
+    return { from, to };
+  }
+  return { from: now - parseInt(v) + 1, to: now };
+}
+
 async function loadKList() {
   if (!selectedCode) return;
   setStatus("k-status", "載入中…");
   $("k-list").innerHTML = "";
-  kData = []; kPage = 0; checked.clear(); updateSelChip();
+  kData = []; kDataAll = []; kPage = 0; checked.clear(); updateSelChip();
+  activeCompanies = new Set();
   try {
-    const year = $("year-sel").value;
+    const range = getYearRange();
     let search = `product_code:"${selectedCode}"`;
-    if (year) {
-      const endYear = year === "2015" ? 2017 : year === "2010" ? 2014 : parseInt(year);
-      const startYear = parseInt(year);
-      search += `+AND+decision_date:[${startYear}0101+TO+${endYear}1231]`;
+    if (range) {
+      search += `+AND+decision_date:[${range.from}0101+TO+${range.to}1231]`;
     }
     const url = `${OPENFDA}/device/510k.json?search=${search}&limit=100&sort=decision_date:desc`;
     const res = await fetch(url);
     const data = await res.json();
     if (!data.results?.length) { setStatus("k-status", "此 product code 無 510(k) 紀錄"); return; }
-    kData = data.results;
-    const total = data.meta?.results?.total || kData.length;
-    $("k-total-chip").textContent = `共 ${total} 筆，顯示最近 ${kData.length} 筆`;
+    kDataAll = data.results;
+    kData = [...kDataAll];
+    const total = data.meta?.results?.total || kDataAll.length;
+    $("k-total-chip").textContent = `共 ${total} 筆，顯示最近 ${kDataAll.length} 筆`;
     $("k-total-chip").style.display = "inline-flex";
+    buildCompanyFilter();
     renderKPage();
     unlockPanel("panel3");
     document.getElementById("nav2").classList.add("done");
@@ -505,6 +571,72 @@ async function loadKList() {
     $("btn-select-all").style.display = "inline-flex";
     setStatus("k-status", "點選項目後前往 Step 3 分析");
   } catch(e) { setStatus("k-status", "載入失敗：" + e.message, "err"); }
+}
+
+function buildCompanyFilter() {
+  // Find which top15 appear in results
+  const wrap = $("company-filter-wrap");
+  const chipsEl = $("company-chips");
+  chipsEl.innerHTML = "";
+  activeCompanies = new Set();
+
+  const presentTop15 = TOP15.filter(co =>
+    kDataAll.some(r => (r.applicant || "").toLowerCase().includes(co.toLowerCase()))
+  );
+
+  if (!presentTop15.length) { wrap.style.display = "none"; return; }
+  wrap.style.display = "block";
+
+  presentTop15.forEach(co => {
+    const chip = document.createElement("span");
+    chip.className = "company-chip";
+    chip.textContent = co;
+    chip.onclick = () => toggleCompany(co, chip);
+    chipsEl.appendChild(chip);
+  });
+}
+
+function toggleCompany(co, el) {
+  if (activeCompanies.has(co)) {
+    activeCompanies.delete(co);
+    el.classList.remove("active");
+  } else {
+    activeCompanies.add(co);
+    el.classList.add("active");
+  }
+  applyCompanyFilter();
+}
+
+function applyCompanyFilter() {
+  const custom = ($("company-custom").value || "").toLowerCase().trim();
+  const hasChip = activeCompanies.size > 0;
+  const hasCustom = custom.length > 0;
+
+  if (!hasChip && !hasCustom) {
+    kData = [...kDataAll];
+  } else {
+    kData = kDataAll.filter(r => {
+      const name = (r.applicant || "").toLowerCase();
+      const chipMatch = hasChip && [...activeCompanies].some(co => name.includes(co.toLowerCase()));
+      const customMatch = hasCustom && name.includes(custom);
+      return chipMatch || customMatch;
+    });
+  }
+  kPage = 0;
+  $("filter-count").textContent = kData.length ? `篩選後 ${kData.length} 筆` : "無符合結果";
+  renderKPage();
+}
+
+function filterByCompany() { applyCompanyFilter(); }
+
+function clearCompanyFilter() {
+  activeCompanies = new Set();
+  document.querySelectorAll(".company-chip").forEach(c => c.classList.remove("active"));
+  $("company-custom").value = "";
+  kData = [...kDataAll];
+  kPage = 0;
+  $("filter-count").textContent = "";
+  renderKPage();
 }
 
 function renderKPage() {
