@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FDA 510(k) Performance Test Explorer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root {
+  --bg: #f7f6f3;
+  --surface: #ffffff;
+  --surface2: #f0efe9;
+  --border: #dddbd3;
+  --border2: #c8c6bc;
+  --text: #1a1916;
+  --text2: #6b6960;
+  --text3: #9b9a94;
+  --teal: #0f6e56;
+  --teal-light: #e1f5ee;
+  --teal-mid: #1d9e75;
+  --teal-border: #5dcaa5;
+  --amber: #854f0b;
+  --amber-light: #faeeda;
+  --red: #a32d2d;
+  --red-light: #fcebeb;
+  --mono: "SF Mono", "Fira Code", "Consolas", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141412;
+    --surface: #1e1d1b;
+    --surface2: #252420;
+    --border: #2e2d29;
+    --border2: #3d3c36;
+    --text: #e8e6df;
+    --text2: #a09e96;
+    --text3: #605e58;
+    --teal-light: #0a2e22;
+    --teal-border: #1d6e52;
+    --amber-light: #2a1a05;
+    --red-light: #2a0e0e;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; min-height: 100vh; }
+
+/* Layout */
+.shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.main { padding: 2rem 2.5rem; max-width: 820px; }
+
+/* Sidebar */
+.logo { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); margin-bottom: 2rem; display: flex; align-items: center; gap: 8px; }
+.logo svg { flex-shrink: 0; }
+.nav-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin: 1.5rem 0 0.5rem; padding-left: 8px; }
+.nav-step { display: flex; align-items: flex-start; gap: 10px; padding: 8px; border-radius: var(--radius); cursor: default; margin-bottom: 2px; }
+.nav-step.clickable { cursor: pointer; }
+.nav-step.clickable:hover { background: var(--surface2); }
+.nav-step.active { background: var(--teal-light); }
+.step-dot { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--border2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--text3); flex-shrink: 0; margin-top: 1px; }
+.nav-step.active .step-dot { background: var(--teal-mid); border-color: var(--teal-mid); color: #fff; }
+.nav-step.done .step-dot { background: var(--teal); border-color: var(--teal); color: #fff; }
+.step-info { flex: 1; min-width: 0; }
+.step-info-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.nav-step.active .step-info-title { color: var(--teal); }
+.step-info-sub { font-size: 11px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* API key config */
+.config-box { margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+.config-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin-bottom: 6px; }
+.config-input-wrap { position: relative; }
+.config-input-wrap input { width: 100%; font-size: 12px; font-family: var(--mono); padding: 6px 32px 6px 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); }
+.proxy-note { font-size: 11px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+.proxy-note a { color: var(--teal); text-decoration: none; }
+
+/* Main content */
+.page-title { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.page-sub { font-size: 14px; color: var(--text2); margin-bottom: 2rem; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+.panel-title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text3); margin-bottom: 1rem; }
+
+/* Search row */
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface2); color: var(--text); font-size: 14px; }
+.search-row input:focus { outline: none; border-color: var(--teal-mid); }
+button { padding: 8px 16px; border: 1px solid var(--border2); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background 0.1s; white-space: nowrap; }
+button:hover { background: var(--surface2); }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--teal); border-color: var(--teal); color: #fff; }
+button.primary:hover { background: var(--teal-mid); }
+button.primary:disabled { opacity: 0.4; }
+
+/* Results lists */
+.result-list { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; max-height: 220px; overflow-y: auto; }
+.result-item { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.result-item:hover { background: var(--surface2); border-color: var(--border2); }
+.result-item.selected { border-color: var(--teal-border); background: var(--teal-light); }
+.result-item .code { font-weight: 600; font-family: var(--mono); font-size: 13px; color: var(--teal); min-width: 40px; }
+.result-item .name { flex: 1; margin: 0 10px; color: var(--text); }
+.result-item .cls { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
+/* K-number list */
+.k-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface2); color: var(--text); font-size: 13px; cursor: pointer; }
+.k-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.k-item { padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); display: grid; grid-template-columns: 76px 1fr auto; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+.k-item:hover { background: var(--surface2); }
+.k-item.checked { border-color: var(--teal-border); background: var(--teal-light); }
+.k-num { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--teal); }
+.k-meta .k-name { font-weight: 500; line-height: 1.3; }
+.k-meta .k-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.k-check { width: 16px; height: 16px; border: 1.5px solid var(--border2); border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.k-item.checked .k-check { background: var(--teal); border-color: var(--teal); }
+.k-item.checked .k-check::after { content: "✓"; color: #fff; font-size: 10px; font-weight: 700; }
+
+.pagination { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 13px; color: var(--text2); }
+.pagination button { padding: 5px 12px; font-size: 12px; }
+
+/* Status bar */
+.status { font-size: 12px; color: var(--text3); margin-top: 8px; min-height: 16px; }
+.status.err { color: var(--red); }
+.status.ok { color: var(--teal); }
+
+/* Chip / badge */
+.chip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.chip.teal { background: var(--teal-light); color: var(--teal); border-color: var(--teal-border); }
+
+/* Step 3 — analysis */
+.analyze-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.progress-bar-wrap { height: 4px; background: var(--border); border-radius: 2px; margin-bottom: 14px; overflow: hidden; display: none; }
+.progress-bar { height: 100%; background: var(--teal-mid); width: 0%; transition: width 0.3s; border-radius: 2px; }
+
+.result-card { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 10px; overflow: hidden; }
+.result-card-header { padding: 10px 14px; background: var(--surface2); display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.result-card-knum { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--teal); }
+.result-card-device { font-size: 13px; font-weight: 500; margin: 2px 0; }
+.result-card-sub { font-size: 11px; color: var(--text3); }
+.result-card-links { display: flex; gap: 6px; flex-shrink: 0; }
+.result-card-links a { font-size: 11px; color: var(--teal); text-decoration: none; padding: 3px 8px; border: 1px solid var(--teal-border); border-radius: var(--radius); white-space: nowrap; }
+.result-card-links a:hover { background: var(--teal-light); }
+.result-card-body { padding: 10px 14px; }
+.test-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.test-tag { font-size: 12px; padding: 3px 10px; border-radius: 10px; background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border); }
+.test-tag.iso { background: var(--amber-light); color: var(--amber); border-color: #ef9f27; }
+.no-test { font-size: 12px; color: var(--text3); font-style: italic; }
+.parsing-label { font-size: 12px; color: var(--text3); animation: pulse 1.2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+/* Export */
+.export-row { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+/* Responsive */
+@media (max-width: 700px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  .main { padding: 1.25rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+        <rect x="1" y="1" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M5 9h8M5 6h5M5 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      510(k) Explorer
+    </div>
+
+    <div class="nav-label">Pipeline</div>
+
+    <div class="nav-step active" id="nav1">
+      <div class="step-dot">1</div>
+      <div class="step-info">
+        <div class="step-info-title">Product Code</div>
+        <div class="step-info-sub" id="nav1-sub">輸入器材關鍵字</div>
+      </div>
+    </div>
+
+    <div class="nav-step" id="nav2">
+      <div class="step-dot">2</div>
+      <div class="step-info">
+        <div class="step-info-title">510(k) 清單</div>
+        <div class="step-info-sub" id="nav2-sub">選擇 product code 後載入</div>
+      </div>
+    </div>
+
+    <div class="nav-step" id="nav3">
+      <div class="step-dot">3</div>
+      <div class="step-info">
+        <div class="step-info-title">測試項目擷取</div>
+        <div class="step-info-sub" id="nav3-sub">AI 解析 PDF Summary</div>
+      </div>
+    </div>
+
+    <div class="config-box">
+      <div class="config-label">Anthropic API Key</div>
+      <div class="config-input-wrap">
+        <input type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off" />
+      </div>
+
+      <div class="config-label" style="margin-top:12px;">Proxy URL</div>
+      <div class="config-input-wrap">
+        <input type="text" id="proxy-url" placeholder="https://fda-proxy.xxx.workers.dev" />
+      </div>
+      <div class="proxy-note">
+        部署 <a href="#" onclick="showProxyHelp()">Cloudflare Worker</a> 後貼上 URL。<br>
+        未設定時 AI 以器材名稱推斷測試項目。
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <h1 class="page-title">FDA 510(k) Performance Test Explorer</h1>
+    <p class="page-sub">依器材類型查詢所有已清關產品，並擷取 510(k) Summary 的功能性測試項目。</p>
+
+    <!-- Step 1 -->
+    <div class="panel">
+      <div class="panel-title">Step 1 — 查詢 FDA Product Code</div>
+      <div class="search-row">
+        <input type="text" id="kw-input" placeholder="例：biopsy needle、hydrophilic catheter、trocar…" />
+        <button class="primary" onclick="searchCodes()">查詢</button>
+      </div>
+      <div class="result-list" id="code-list"></div>
+      <div class="status" id="code-status"></div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="panel" id="panel2" style="opacity:0.45; pointer-events:none;">
+      <div class="panel-title">Step 2 — 510(k) 清單 <span class="chip teal" id="selected-chip" style="display:none;"></span></div>
+      <div class="k-toolbar">
+        <select id="year-sel">
+          <option value="">所有年份</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+          <option value="2021">2021</option>
+          <option value="2020">2020</option>
+          <option value="2019">2019</option>
+          <option value="2018">2018</option>
+          <option value="2015">2015–2017</option>
+          <option value="2010">2010–2014</option>
+        </select>
+        <button id="btn-load" onclick="loadKList()">載入清單</button>
+        <span class="chip" id="k-total-chip" style="display:none;"></span>
+      </div>
+      <div class="k-list" id="k-list"></div>
+      <div class="pagination" id="k-pages" style="display:none;">
+        <button onclick="changePage(-1)" id="btn-prev">← 前一頁</button>
+        <span id="page-label"></span>
+        <button onclick="changePage(1)" id="btn-next">下一頁 →</button>
+      </div>
+      <div class="status" id="k-status"></div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="panel" id="panel3" style="opacity:0.45; pointer-events:none;">
+      <div class="panel-title">Step 3 — 功能性測試項目擷取</div>
+      <div class="analyze-toolbar">
+        <button class="primary" id="btn-analyze" onclick="analyzeSelected()">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M7 1a6 6 0 100 12A6 6 0 007 1zm-.5 3.5h1v3.25l2.1 1.21-.5.87L6.5 8.12V4.5z"/></svg>
+          分析已選項目
+        </button>
+        <span class="chip teal" id="sel-count-chip" style="display:none;"></span>
+        <button id="btn-select-all" onclick="selectAll()" style="display:none;">全選本頁</button>
+      </div>
+      <div class="progress-bar-wrap" id="prog-wrap">
+        <div class="progress-bar" id="prog-bar"></div>
+      </div>
+      <div id="test-results"></div>
+      <div class="status" id="analyze-status"></div>
+      <div class="export-row" id="export-row" style="display:none;">
+        <button onclick="exportJSON()">↓ JSON</button>
+        <button onclick="exportCSV()">↓ CSV</button>
+        <button onclick="exportMarkdown()">↓ Markdown</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ─── Config ───────────────────────────────────────────────
+const OPENFDA = "https://api.fda.gov";
+let selectedCode = null;
+let kData = [];
+let kPage = 0;
+const PAGE = 20;
+let checked = new Set();
+let analysisResults = [];
+
+// ─── Helpers ──────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+function setStatus(id, msg, cls = "") {
+  const el = $(id); el.textContent = msg;
+  el.className = "status" + (cls ? " " + cls : "");
+}
+function unlockPanel(id) {
+  $(id).style.opacity = "1"; $(id).style.pointerEvents = "";
+}
+function getKey() { return $("api-key").value.trim(); }
+function getProxy() { return ($("proxy-url").value.trim()).replace(/\/$/, ""); }
+
+// ─── Step 1: Product Code Search ──────────────────────────
+async function searchCodes() {
+  const kw = $("kw-input").value.trim();
+  if (!kw) return;
+  setStatus("code-status", "查詢中…");
+  $("code-list").innerHTML = "";
+  try {
+    const url = `${OPENFDA}/device/classification.json?search=device_name:"${encodeURIComponent(kw)}"&limit=30`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.results?.length) { setStatus("code-status", "查無結果，嘗試更短的關鍵字"); return; }
+    const seen = new Map();
+    data.results.forEach(r => { if (!seen.has(r.product_code)) seen.set(r.product_code, r); });
+    seen.forEach((r, code) => {
+      const el = document.createElement("div");
+      el.className = "result-item";
+      el.innerHTML = `<span class="code">${code}</span><span class="name">${r.device_name}</span><span class="cls">Class ${r.device_class || "?"}</span>`;
+      el.onclick = () => selectCode(code, r.device_name, el);
+      $("code-list").appendChild(el);
+    });
+    setStatus("code-status", `找到 ${seen.size} 個 Product Code`);
+  } catch(e) { setStatus("code-status", "查詢失敗：" + e.message, "err"); }
+}
+
+function selectCode(code, name, el) {
+  selectedCode = code;
+  document.querySelectorAll(".result-item").forEach(x => x.classList.remove("selected"));
+  el.classList.add("selected");
+  $("selected-chip").textContent = code; $("selected-chip").style.display = "inline-flex";
+  $("nav1-sub").textContent = code + " — " + name.substring(0, 28) + (name.length > 28 ? "…" : "");
+  document.getElementById("nav1").classList.remove("active");
+  document.getElementById("nav1").classList.add("done");
+  document.getElementById("nav2").classList.add("active");
+  $("nav2-sub").textContent = code;
+  unlockPanel("panel2");
+  kData = []; $("k-list").innerHTML = ""; $("k-pages").style.display = "none";
+}
+
+// ─── Step 2: 510(k) List ──────────────────────────────────
+async function loadKList() {
+  if (!selectedCode) return;
+  setStatus("k-status", "載入中…");
+  $("k-list").innerHTML = "";
+  kData = []; kPage = 0; checked.clear(); updateSelChip();
+  try {
+    const year = $("year-sel").value;
+    let search = `product_code:"${selectedCode}"`;
+    if (year) {
+      const endYear = year === "2015" ? 2017 : year === "2010" ? 2014 : parseInt(year);
+      const startYear = parseInt(year);
+      search += `+AND+decision_date:[${startYear}0101+TO+${endYear}1231]`;
+    }
+    const url = `${OPENFDA}/device/510k.json?search=${search}&limit=100&sort=decision_date:desc`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.results?.length) { setStatus("k-status", "此 product code 無 510(k) 紀錄"); return; }
+    kData = data.results;
+    const total = data.meta?.results?.total || kData.length;
+    $("k-total-chip").textContent = `共 ${total} 筆，顯示最近 ${kData.length} 筆`;
+    $("k-total-chip").style.display = "inline-flex";
+    renderKPage();
+    unlockPanel("panel3");
+    document.getElementById("nav2").classList.add("done");
+    document.getElementById("nav3").classList.add("active");
+    $("nav3-sub").textContent = `${kData.length} 筆可選`;
+    $("btn-select-all").style.display = "inline-flex";
+    setStatus("k-status", "點選項目後前往 Step 3 分析");
+  } catch(e) { setStatus("k-status", "載入失敗：" + e.message, "err"); }
+}
+
+function renderKPage() {
+  const list = $("k-list"); list.innerHTML = "";
+  const slice = kData.slice(kPage * PAGE, (kPage + 1) * PAGE);
+  slice.forEach(item => {
+    const el = document.createElement("div");
+    el.className = "k-item" + (checked.has(item.k_number) ? " checked" : "");
+    el.id = "ki-" + item.k_number;
+    const date = (item.decision_date || "").substring(0, 10);
+    el.innerHTML = `
+      <div class="k-num">${item.k_number}</div>
+      <div class="k-meta">
+        <div class="k-name">${item.device_name || ""}</div>
+        <div class="k-sub">${item.applicant || ""} · ${date}</div>
+      </div>
+      <div class="k-check"></div>`;
+    el.onclick = () => toggleK(item.k_number, el);
+    list.appendChild(el);
+  });
+  const pages = Math.ceil(kData.length / PAGE);
+  $("k-pages").style.display = pages > 1 ? "flex" : "none";
+  $("page-label").textContent = `第 ${kPage + 1} / ${pages} 頁`;
+  $("btn-prev").disabled = kPage === 0;
+  $("btn-next").disabled = (kPage + 1) >= pages;
+}
+
+function toggleK(knum, el) {
+  if (checked.has(knum)) { checked.delete(knum); el.classList.remove("checked"); }
+  else { checked.add(knum); el.classList.add("checked"); }
+  updateSelChip();
+}
+
+function selectAll() {
+  const slice = kData.slice(kPage * PAGE, (kPage + 1) * PAGE);
+  slice.forEach(item => { checked.add(item.k_number); document.getElementById("ki-" + item.k_number)?.classList.add("checked"); });
+  updateSelChip();
+}
+
+function updateSelChip() {
+  const n = checked.size;
+  $("sel-count-chip").textContent = `已選 ${n} 筆`;
+  $("sel-count-chip").style.display = n ? "inline-flex" : "none";
+  $("btn-analyze").disabled = n === 0;
+}
+
+function changePage(d) { kPage += d; renderKPage(); }
+
+// ─── Step 3: Analysis ─────────────────────────────────────
+async function analyzeSelected() {
+  const key = getKey();
+  if (!key) { alert("請先在左側填入 Anthropic API Key"); return; }
+  const knums = [...checked];
+  if (!knums.length) return;
+
+  $("test-results").innerHTML = "";
+  analysisResults = [];
+  $("export-row").style.display = "none";
+  $("prog-wrap").style.display = "block";
+  $("btn-analyze").disabled = true;
+
+  for (let i = 0; i < knums.length; i++) {
+    const knum = knums[i];
+    const item = kData.find(x => x.k_number === knum);
+    setStatus("analyze-status", `分析 ${knum}（${i + 1}/${knums.length}）…`);
+    $("prog-bar").style.width = Math.round(((i + 1) / knums.length) * 100) + "%";
+
+    // placeholder card while loading
+    const card = createPlaceholderCard(item);
+    $("test-results").insertBefore(card, $("test-results").firstChild);
+
+    try {
+      let tests = [];
+      const proxy = getProxy();
+      if (proxy) {
+        tests = await analyzeViaPdf(knum, item, key, proxy, card);
+      } else {
+        tests = await analyzeViaName(knum, item, key);
+      }
+      renderCardTests(card, tests, knum, item);
+      analysisResults.push({ k_number: knum, device_name: item?.device_name || "", applicant: item?.applicant || "", decision_date: (item?.decision_date || "").substring(0, 10), tests, pdf_url: kToPdfUrl(knum) });
+    } catch(e) {
+      renderCardError(card, e.message);
+      analysisResults.push({ k_number: knum, device_name: item?.device_name || "", applicant: "", decision_date: "", tests: [], error: e.message });
+    }
+  }
+
+  setStatus("analyze-status", `完成 ${knums.length} 筆`, "ok");
+  $("prog-wrap").style.display = "none";
+  $("btn-analyze").disabled = false;
+  if (analysisResults.some(r => r.tests.length)) $("export-row").style.display = "flex";
+}
+
+function kToPdfUrl(knum) {
+  const raw = knum.substring(1, 3);
+  const folder = raw.replace(/^0/, "");
+  return `https://www.accessdata.fda.gov/cdrh_docs/pdf${folder}/${knum}.pdf`;
+}
+
+async function analyzeViaPdf(knum, item, key, proxy, card) {
+  // 1. Fetch PDF via proxy
+  const pdfBytes = await fetch(`${proxy}/pdf?k=${knum}`).then(async r => {
+    if (!r.ok) throw new Error(`Proxy returned ${r.status}`);
+    return r.arrayBuffer();
+  });
+
+  // 2. Extract text with PDF.js
+  card.querySelector(".parsing-label").textContent = "解析 PDF 文字…";
+  const pdfjsLib = window["pdfjs-dist/build/pdf"];
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const pdf = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+  let fullText = "";
+  const maxPages = Math.min(pdf.numPages, 30);
+  for (let p = 1; p <= maxPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    fullText += tc.items.map(s => s.str).join(" ") + "\n";
+  }
+
+  // 3. Send to Claude
+  card.querySelector(".parsing-label").textContent = "AI 解析測試項目…";
+  return await claudeExtract(fullText, item?.device_name || knum, key);
+}
+
+async function analyzeViaName(knum, item, key) {
+  const name = item?.device_name || knum;
+  const applicant = item?.applicant || "";
+  const date = (item?.decision_date || "").substring(0, 10);
+  const prompt = `You are analyzing an FDA 510(k) submission for: "${name}" by ${applicant} (${knum}, ${date}).
+
+Based on your knowledge of typical 510(k) performance testing for this device type, list the functional and performance tests that would be required. Include ISO/ASTM standard numbers where commonly applicable.
+
+Respond ONLY with a JSON array of strings. No explanation, no markdown fences.
+Example: ["Tensile strength","Dimensional verification","ISO 10993-5 Cytotoxicity","ASTM F2132 Kink resistance"]`;
+
+  return await claudeCall(prompt, key);
+}
+
+async function claudeExtract(pdfText, deviceName, key) {
+  const excerpt = pdfText.substring(0, 12000);
+  const prompt = `You are extracting performance testing information from an FDA 510(k) Summary document for a medical device: "${deviceName}".
+
+Here is the text from the 510(k) Summary PDF:
+---
+${excerpt}
+---
+
+Extract ALL functional/performance tests mentioned. Include ISO and ASTM standard numbers exactly as written. If the document lists a test table, extract every row.
+
+Respond ONLY with a JSON array of test name strings. No explanation, no markdown fences.
+Example: ["Tensile strength (ASTM F2132)","ISO 10993-5 Cytotoxicity","Sterility (ISO 11135)","Dimensional verification"]`;
+
+  return await claudeCall(prompt, key);
+}
+
+async function claudeCall(prompt, key) {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json();
+  const raw = data.content?.map(c => c.text || "").join("") || "[]";
+  const clean = raw.replace(/```json|```/g, "").trim();
+  try { return JSON.parse(clean); }
+  catch { return raw.split("\n").map(l => l.replace(/^[-"*\d.]+\s*/, "").replace(/",?$/, "").trim()).filter(Boolean); }
+}
+
+// ─── Card rendering ────────────────────────────────────────
+function createPlaceholderCard(item) {
+  const card = document.createElement("div");
+  card.className = "result-card";
+  const date = (item?.decision_date || "").substring(0, 10);
+  const pdfUrl = kToPdfUrl(item?.k_number || "");
+  card.innerHTML = `
+    <div class="result-card-header">
+      <div>
+        <div class="result-card-knum">${item?.k_number || ""}</div>
+        <div class="result-card-device">${item?.device_name || ""}</div>
+        <div class="result-card-sub">${item?.applicant || ""} · ${date}</div>
+      </div>
+      <div class="result-card-links">
+        <a href="${pdfUrl}" target="_blank" rel="noopener">PDF ↗</a>
+        <a href="https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpmn/pmn.cfm?ID=${item?.k_number || ""}" target="_blank" rel="noopener">FDA ↗</a>
+      </div>
+    </div>
+    <div class="result-card-body">
+      <span class="parsing-label">取得 PDF…</span>
+    </div>`;
+  return card;
+}
+
+function renderCardTests(card, tests, knum, item) {
+  const body = card.querySelector(".result-card-body");
+  if (!tests.length) { body.innerHTML = '<div class="no-test">未找到測試項目（Summary 可能未公開）</div>'; return; }
+  const tags = tests.map(t => {
+    const hasStd = /ISO|ASTM|IEC|EN\s?[\d]|AAMI/i.test(t);
+    return `<span class="test-tag${hasStd ? " iso" : ""}">${t}</span>`;
+  }).join("");
+  body.innerHTML = `<div class="test-tags">${tags}</div>`;
+}
+
+function renderCardError(card, msg) {
+  card.querySelector(".result-card-body").innerHTML = `<div class="no-test" style="color:var(--red)">錯誤：${msg}</div>`;
+}
+
+// ─── Export ────────────────────────────────────────────────
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(analysisResults, null, 2)], { type: "application/json" });
+  dl(blob, `510k_tests_${selectedCode || "export"}.json`);
+}
+
+function exportCSV() {
+  const rows = [["k_number","device_name","applicant","decision_date","test_name","pdf_url"]];
+  analysisResults.forEach(r => {
+    if (r.tests.length) r.tests.forEach(t => rows.push([r.k_number, r.device_name, r.applicant, r.decision_date, t, r.pdf_url]));
+    else rows.push([r.k_number, r.device_name, r.applicant, r.decision_date, "", r.pdf_url]);
+  });
+  const csv = rows.map(r => r.map(c => `"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+  dl(new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" }), `510k_tests_${selectedCode || "export"}.csv`);
+}
+
+function exportMarkdown() {
+  let md = `# FDA 510(k) Performance Tests — ${selectedCode || ""}\n\n`;
+  md += `Generated: ${new Date().toISOString().substring(0, 10)}\n\n`;
+  analysisResults.forEach(r => {
+    md += `## ${r.k_number} — ${r.device_name}\n`;
+    md += `**Applicant:** ${r.applicant}  **Date:** ${r.decision_date}  [PDF](${r.pdf_url})\n\n`;
+    if (r.tests.length) r.tests.forEach(t => { md += `- ${t}\n`; });
+    else md += "_No tests extracted_\n";
+    md += "\n";
+  });
+  dl(new Blob([md], { type: "text/markdown" }), `510k_tests_${selectedCode || "export"}.md`);
+}
+
+function dl(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+}
+
+// ─── Misc ──────────────────────────────────────────────────
+function showProxyHelp() {
+  alert("Cloudflare Worker 部署步驟：\n\n1. 前往 https://dash.cloudflare.com\n2. Workers & Pages → Create Worker\n3. 貼上 worker.js 內容並 Deploy\n4. 複製 Worker URL 貼入左側欄位\n\nWorker 檔案位於本 repo 的 worker.js");
+  return false;
+}
+
+$("kw-input").addEventListener("keydown", e => { if (e.key === "Enter") searchCodes(); });
+
+// Load API key / proxy from localStorage if saved
+(function() {
+  const k = localStorage.getItem("fda_api_key"); if (k) $("api-key").value = k;
+  const p = localStorage.getItem("fda_proxy"); if (p) $("proxy-url").value = p;
+})();
+$("api-key").addEventListener("change", () => localStorage.setItem("fda_api_key", $("api-key").value.trim()));
+$("proxy-url").addEventListener("change", () => localStorage.setItem("fda_proxy", $("proxy-url").value.trim()));
+</script>
+</body>
+</html>
