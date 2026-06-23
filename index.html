@@ -44,6 +44,42 @@
     --red-light: #2a0e0e;
   }
 }
+
+/* ─── Login overlay ────────────────────────────────────── */
+#login-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+}
+.login-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 2rem;
+  width: 320px;
+  text-align: center;
+}
+.login-logo {
+  font-size: 13px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--teal);
+  margin-bottom: 1.5rem;
+}
+.login-title { font-size: 18px; font-weight: 500; margin-bottom: 0.4rem; }
+.login-sub { font-size: 13px; color: var(--text2); margin-bottom: 1.5rem; }
+.login-box input[type=password] {
+  width: 100%; padding: 9px 12px; margin-bottom: 10px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface2); color: var(--text); font-size: 14px;
+  text-align: center; letter-spacing: 0.05em;
+}
+.login-box input[type=password]:focus { outline: none; border-color: var(--teal-mid); }
+.login-btn {
+  width: 100%; padding: 9px; background: var(--teal);
+  border: none; border-radius: var(--radius);
+  color: #fff; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.login-btn:hover { background: var(--teal-mid); }
+.login-err { font-size: 12px; color: var(--red); margin-top: 8px; min-height: 16px; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; min-height: 100vh; }
 
@@ -162,6 +198,24 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 </style>
 </head>
 <body>
+
+
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="vertical-align:-2px; margin-right:6px">
+        <rect x="1" y="1" width="14" height="14" rx="3" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M4 8h8M4 5h5M4 11h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      510(k) Explorer
+    </div>
+    <div class="login-title">歡迎使用</div>
+    <div class="login-sub">請輸入存取密碼</div>
+    <input type="password" id="pw-input" placeholder="Password" autocomplete="current-password" />
+    <button class="login-btn" onclick="doLogin()">進入</button>
+    <div class="login-err" id="pw-err"></div>
+  </div>
+</div>
 
 <div class="shell">
   <!-- Sidebar -->
@@ -313,25 +367,14 @@ function getProxy() { return ($("proxy-url").value.trim()).replace(/\/$/, ""); }
 function isChinese(str) { return /[\u4e00-\u9fff]/.test(str); }
 
 async function translateToEnglish(text, key) {
-  // 1. MyMemory (free, no key needed)
-  try {
-    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=zh|en`);
-    const d = await r.json();
-    if (d.responseStatus === 200 && d.responseData?.translatedText) {
-      const t = d.responseData.translatedText.trim();
-      if (t && !/PLEASE SELECT/i.test(t)) return t;
-    }
-  } catch(e) {}
-
-  // 2. Claude API fallback
-  if (!key) throw new Error("翻譯失敗，請填入 Anthropic API Key 作為備援");
+  if (!key) throw new Error("中文查詢需要填入 Anthropic API Key");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 100,
-      messages: [{ role: "user", content: `Translate this medical device name to English. Return ONLY the English translation, nothing else: "${text}"` }]
+      max_tokens: 60,
+      messages: [{ role: "user", content: `Translate this medical device name to English. Return ONLY 2-4 keywords suitable for FDA database search, nothing else: "${text}"` }]
     })
   });
   const d = await res.json();
@@ -695,6 +738,61 @@ function showProxyHelp() {
 }
 
 $("kw-input").addEventListener("keydown", e => { if (e.key === "Enter") searchCodes(); });
+// ─── Login ────────────────────────────────────────────────
+const PASS_HASH = "3ebfff9091f45a3b71ed6d76212914d125a1d751900a26ef38e619c7247d8b4f";
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+async function doLogin() {
+  const pw = $("pw-input").value;
+  const hash = await sha256(pw);
+  if (hash === PASS_HASH) {
+    sessionStorage.setItem("fda510k_auth", "1");
+    $("login-overlay").style.display = "none";
+  } else {
+    $("pw-err").textContent = "密碼錯誤，請重試";
+    $("pw-input").value = "";
+    $("pw-input").focus();
+  }
+}
+
+$("pw-input").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+if (sessionStorage.getItem("fda510k_auth") === "1") {
+  $("login-overlay").style.display = "none";
+}
+
+// ─── Login ────────────────────────────────────────────────
+const PASS_HASH = "3ebfff9091f45a3b71ed6d76212914d125a1d751900a26ef38e619c7247d8b4f";
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
+}
+
+async function doLogin() {
+  const pw = $("pw-input").value;
+  const hash = await sha256(pw);
+  if (hash === PASS_HASH) {
+    sessionStorage.setItem("fda510k_auth", "1");
+    $("login-overlay").style.display = "none";
+  } else {
+    $("pw-err").textContent = "密碼錯誤，請重試";
+    $("pw-input").value = "";
+    $("pw-input").focus();
+  }
+}
+
+$("pw-input").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+
+// Auto-unlock if already authenticated this session
+if (sessionStorage.getItem("fda510k_auth") === "1") {
+  $("login-overlay").style.display = "none";
+}
+
 
 // Load API key / proxy from localStorage if saved
 (function() {
