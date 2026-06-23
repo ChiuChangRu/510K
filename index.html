@@ -310,18 +310,82 @@ function getKey() { return $("api-key").value.trim(); }
 function getProxy() { return ($("proxy-url").value.trim()).replace(/\/$/, ""); }
 
 // ─── Step 1: Product Code Search ──────────────────────────
-async function searchCodes() {
-  const kw = $("kw-input").value.trim();
-  if (!kw) return;
-  setStatus("code-status", "查詢中…");
-  $("code-list").innerHTML = "";
+function isChinese(str) { return /[\u4e00-\u9fff]/.test(str); }
+
+async function translateToEnglish(text, key) {
+  // 1. MyMemory (free, no key needed)
   try {
-    const url = `${OPENFDA}/device/classification.json?search=device_name:"${encodeURIComponent(kw)}"&limit=30`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!data.results?.length) { setStatus("code-status", "查無結果，嘗試更短的關鍵字"); return; }
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=zh|en`);
+    const d = await r.json();
+    if (d.responseStatus === 200 && d.responseData?.translatedText) {
+      const t = d.responseData.translatedText.trim();
+      if (t && !/PLEASE SELECT/i.test(t)) return t;
+    }
+  } catch(e) {}
+
+  // 2. Claude API fallback
+  if (!key) throw new Error("翻譯失敗，請填入 Anthropic API Key 作為備援");
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 100,
+      messages: [{ role: "user", content: `Translate this medical device name to English. Return ONLY the English translation, nothing else: "${text}"` }]
+    })
+  });
+  const d = await res.json();
+  return d.content?.[0]?.text?.trim() || text;
+}
+
+async function fdaClassSearch(query) {
+  // Build fuzzy AND query from individual words
+  const words = query.trim().split(/\s+/).filter(w => w.length > 2);
+  let searchExpr;
+  if (words.length === 1) {
+    searchExpr = `device_name:${encodeURIComponent(words[0])}`;
+  } else {
+    searchExpr = words.map(w => `device_name:${encodeURIComponent(w)}`).join("+AND+");
+  }
+  const url = `${OPENFDA}/device/classification.json?search=${searchExpr}&limit=50`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.results || [];
+}
+
+async function searchCodes() {
+  let kw = $("kw-input").value.trim();
+  if (!kw) return;
+  $("code-list").innerHTML = "";
+
+  // Translate if Chinese
+  if (isChinese(kw)) {
+    const key = getKey();
+    if (!key) { setStatus("code-status", "中文查詢需要填入 Anthropic API Key 進行翻譯", "err"); return; }
+    setStatus("code-status", "翻譯中…");
+    try { kw = await translateToEnglish(kw, key); }
+    catch(e) { setStatus("code-status", "翻譯失敗：" + e.message, "err"); return; }
+    setStatus("code-status", `翻譯為「${kw}」，查詢中…`);
+  } else {
+    setStatus("code-status", "查詢中…");
+  }
+
+  try {
+    // Run fuzzy search
+    const results = await fdaClassSearch(kw);
+
+    // If no results and multi-word, try each word alone and merge
+    let merged = results;
+    if (!merged.length) {
+      const words = kw.split(/\s+/).filter(w => w.length > 2);
+      const fallbacks = await Promise.all(words.map(w => fdaClassSearch(w)));
+      merged = fallbacks.flat();
+    }
+
+    if (!merged.length) { setStatus("code-status", "查無結果，嘗試不同關鍵字"); return; }
+
     const seen = new Map();
-    data.results.forEach(r => { if (!seen.has(r.product_code)) seen.set(r.product_code, r); });
+    merged.forEach(r => { if (!seen.has(r.product_code)) seen.set(r.product_code, r); });
     seen.forEach((r, code) => {
       const el = document.createElement("div");
       el.className = "result-item";
