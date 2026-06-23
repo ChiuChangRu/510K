@@ -195,7 +195,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 .company-chip.active { background: var(--teal-light); border-color: var(--teal-border); color: var(--teal); font-weight: 500; }
 
 /* Chinese tag on result items */
-.zh-tag { font-size: 11px; color: var(--text3); margin-left: 6px; }
+.zh-tag { font-size: 11px; color: var(--teal); margin-left: 6px; font-weight: 500; }
 
 /* Responsive */
 @media (max-width: 700px) {
@@ -641,15 +641,40 @@ function clearCompanyFilter() {
 
 const zhNameCache = {};
 
-async function fetchZhName(knum, enName) {
-  if (zhNameCache[knum]) return zhNameCache[knum];
-  // Use ZH_MAP for product code first
-  const code = selectedCode;
-  if (ZH_MAP[code]) {
-    zhNameCache[knum] = ZH_MAP[code];
-    return ZH_MAP[code];
-  }
+async function myMemoryTranslate(text) {
+  try {
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 200))}&langpair=en|zh-TW`);
+    const d = await r.json();
+    if (d.responseStatus === 200) {
+      const t = (d.responseData?.translatedText || "").trim();
+      if (t && !/PLEASE SELECT|MYMEMORY/i.test(t)) return t;
+    }
+  } catch(e) {}
   return "";
+}
+
+async function translatePageNames(slice) {
+  const toTranslate = slice.filter(item => !zhNameCache[item.k_number]);
+  if (!toTranslate.length) return;
+  // Batch with small delay to avoid rate limit
+  for (const item of toTranslate) {
+    const name = (item.device_name || "").replace(/[™®©]/g, "").trim();
+    if (!name) continue;
+    // Check ZH_MAP first (free)
+    if (ZH_MAP[selectedCode]) {
+      zhNameCache[item.k_number] = ZH_MAP[selectedCode];
+      continue;
+    }
+    const zh = await myMemoryTranslate(name);
+    zhNameCache[item.k_number] = zh;
+    // Update DOM if already rendered
+    const nameEl = document.querySelector(`#ki-${item.k_number} .k-name`);
+    if (nameEl && zh) {
+      const existing = nameEl.querySelector(".zh-tag");
+      if (!existing) nameEl.insertAdjacentHTML("beforeend", `<span class="zh-tag">／${zh}</span>`);
+    }
+    await new Promise(r => setTimeout(r, 120)); // ~8 req/sec, well under limit
+  }
 }
 
 function renderKPage() {
@@ -660,17 +685,19 @@ function renderKPage() {
     el.className = "k-item" + (checked.has(item.k_number) ? " checked" : "");
     el.id = "ki-" + item.k_number;
     const date = (item.decision_date || "").substring(0, 10);
-    const zhCode = ZH_MAP[selectedCode] || "";
+    const zhCached = zhNameCache[item.k_number] || "";
     el.innerHTML = `
       <div class="k-num">${item.k_number}</div>
       <div class="k-meta">
-        <div class="k-name">${item.device_name || ""}${zhCode ? `<span class="zh-tag">／${zhCode}</span>` : ""}</div>
+        <div class="k-name">${item.device_name || ""}${zhCached ? `<span class="zh-tag">／${zhCached}</span>` : ""}</div>
         <div class="k-sub">${item.applicant || ""} · ${date}</div>
       </div>
       <div class="k-check"></div>`;
     el.onclick = () => toggleK(item.k_number, el);
     list.appendChild(el);
   });
+  // Async translate names in background
+  translatePageNames(slice);
   const pages = Math.ceil(kData.length / PAGE);
   $("k-pages").style.display = pages > 1 ? "flex" : "none";
   $("page-label").textContent = `第 ${kPage + 1} / ${pages} 頁`;
