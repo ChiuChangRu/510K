@@ -30,17 +30,19 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1a1512;
-    --surface: #221c18;
-    --surface2: #2a2320;
-    --border: #352d28;
-    --border2: #4a3f38;
-    --text: #ede8e0;
-    --text2: #a09890;
-    --text3: #605850;
-    --teal-light: #2e1a10;
-    --teal-border: #8a3d1a;
-    --amber-light: #2a1a05;
+    --bg: #0f1115;
+    --surface: #181b22;
+    --surface2: #20242d;
+    --border: #262a33;
+    --border2: #353b46;
+    --text: #e4e6eb;
+    --text2: #9aa0ab;
+    --text3: #6b727e;
+    --teal: #ea580c;
+    --teal-mid: #fb7335;
+    --teal-light: #2a1810;
+    --teal-border: #7a3a18;
+    --amber-light: #2a1f08;
     --red-light: #2a0e0e;
   }
 }
@@ -230,7 +232,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 .company-chip.active { background: var(--teal-light); border-color: var(--teal-border); color: var(--teal); font-weight: 500; }
 
 /* Chinese tag on result items */
-.zh-tag { font-size: 12px; color: var(--teal-mid); margin-left: 8px; font-weight: 600; background: var(--teal-light); padding: 1px 6px; border-radius: 4px; border: 1px solid var(--teal-border); white-space: nowrap; }
+.zh-tag { font-size: 12px; color: var(--text2); margin-left: 8px; font-weight: 400; white-space: nowrap; }
 .zh-tag.zh-pending { display: none; }
 
 /* Responsive */
