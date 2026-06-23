@@ -786,33 +786,6 @@ if (sessionStorage.getItem("fda510k_auth") === "1") {
   $("login-overlay").style.display = "none";
 }
 
-// ─── Login ────────────────────────────────────────────────
-const PASS_HASH = "3ebfff9091f45a3b71ed6d76212914d125a1d751900a26ef38e619c7247d8b4f";
-
-async function sha256(str) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
-}
-
-async function doLogin() {
-  const pw = $("pw-input").value;
-  const hash = await sha256(pw);
-  if (hash === PASS_HASH) {
-    sessionStorage.setItem("fda510k_auth", "1");
-    $("login-overlay").style.display = "none";
-  } else {
-    $("pw-err").textContent = "密碼錯誤，請重試";
-    $("pw-input").value = "";
-    $("pw-input").focus();
-  }
-}
-
-$("pw-input").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
-
-// Auto-unlock if already authenticated this session
-if (sessionStorage.getItem("fda510k_auth") === "1") {
-  $("login-overlay").style.display = "none";
-}
 
 
 // Load API key / proxy from localStorage if saved
