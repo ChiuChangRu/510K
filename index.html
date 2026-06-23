@@ -86,7 +86,15 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); font
 /* Layout */
 .shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
 .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.main { padding: 2rem 2.5rem; max-width: 820px; }
+.content-area { display: grid; grid-template-columns: 1fr; transition: grid-template-columns 0.2s; min-width: 0; }
+.content-area.has-detail { grid-template-columns: 1fr 340px; }
+.main { padding: 2rem 2rem; min-width: 0; }
+.detail-panel { background: var(--surface); border-left: 1px solid var(--border); padding: 1.25rem 1.25rem; display: none; overflow-y: auto; height: 100vh; position: sticky; top: 0; }
+.content-area.has-detail .detail-panel { display: block; }
+@media (max-width: 900px) {
+  .content-area.has-detail { grid-template-columns: 1fr; }
+  .detail-panel { height: auto; position: static; border-left: none; border-top: 1px solid var(--border); }
+}
 
 /* Sidebar */
 .logo { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--teal); margin-bottom: 2rem; display: flex; align-items: center; gap: 8px; }
@@ -145,6 +153,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 .k-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
 .k-item { padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius); display: grid; grid-template-columns: 76px 1fr auto; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
 .k-item:hover { background: var(--surface2); }
+.k-item.detail-active { border-color: var(--teal-border); background: var(--teal-light); }
 .k-item.checked { border-color: var(--teal-border); background: var(--teal-light); }
 .k-num { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--teal); }
 .k-meta .k-name { font-weight: 500; line-height: 1.3; }
@@ -188,6 +197,25 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 
 /* Export */
 .export-row { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+/* Detail panel */
+.detail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--text3); font-size: 13px; gap: 8px; }
+.detail-knum { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--teal); margin-bottom: 4px; }
+.detail-name { font-size: 15px; font-weight: 500; line-height: 1.4; margin-bottom: 4px; }
+.detail-zh { font-size: 13px; color: var(--teal-mid); font-weight: 500; margin-bottom: 12px; }
+.detail-section { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 0.5px solid var(--border); }
+.detail-section:last-child { border-bottom: none; }
+.detail-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.detail-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; gap: 8px; }
+.detail-row .label { color: var(--text2); flex-shrink: 0; }
+.detail-row .value { color: var(--text); text-align: right; font-family: var(--mono); font-size: 12px; }
+.detail-predicate { font-size: 12px; color: var(--text); background: var(--surface2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 6px 10px; margin-bottom: 5px; line-height: 1.4; }
+.detail-test-tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border); margin: 2px; }
+.detail-test-tag.iso { background: var(--amber-light); color: var(--amber); border-color: #ef9f27; }
+.detail-links { display: flex; gap: 6px; margin-top: 10px; }
+.detail-links a { font-size: 12px; color: var(--teal); text-decoration: none; padding: 4px 10px; border: 1px solid var(--teal-border); border-radius: var(--radius); }
+.detail-links a:hover { background: var(--teal-light); }
+.detail-analyze-btn { width: 100%; margin-top: 10px; }
 
 /* Company filter chips */
 .company-chip { font-size: 12px; padding: 4px 10px; border-radius: 10px; border: 1px solid var(--border2); background: var(--surface2); color: var(--text2); cursor: pointer; transition: all 0.1s; }
@@ -280,6 +308,8 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
     </div>
   </aside>
 
+  <!-- Content area -->
+  <div class="content-area" id="content-area">
   <!-- Main -->
   <main class="main">
     <h1 class="page-title">FDA 510(k) Performance Test Explorer</h1>
@@ -356,6 +386,46 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
       </div>
     </div>
   </main>
+
+  <!-- Detail panel -->
+  <aside class="detail-panel" id="detail-panel">
+    <div class="detail-empty" id="detail-empty">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><rect x="4" y="4" width="24" height="24" rx="4" stroke="currentColor" stroke-width="1.5"/><path d="M10 12h12M10 17h8M10 22h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span>點選清單項目查看詳情</span>
+    </div>
+    <div id="detail-content" style="display:none;">
+      <div class="detail-knum" id="d-knum"></div>
+      <div class="detail-name" id="d-name"></div>
+      <div class="detail-zh" id="d-zh"></div>
+      <div class="detail-links" id="d-links"></div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">基本資訊</div>
+        <div class="detail-row"><span class="label">申請廠商</span><span class="value" id="d-applicant"></span></div>
+        <div class="detail-row"><span class="label">清關日期</span><span class="value" id="d-date"></span></div>
+        <div class="detail-row"><span class="label">器材類別</span><span class="value" id="d-class"></span></div>
+        <div class="detail-row"><span class="label">Regulation</span><span class="value" id="d-reg"></span></div>
+        <div class="detail-row"><span class="label">提交類型</span><span class="value" id="d-type"></span></div>
+      </div>
+
+      <div class="detail-section" id="d-predicate-section">
+        <div class="detail-section-title">Predicate Device</div>
+        <div id="d-predicates"></div>
+      </div>
+
+      <div class="detail-section" id="d-tests-section">
+        <div class="detail-section-title">功能性測試項目</div>
+        <div id="d-tests"><span style="font-size:12px; color:var(--text3);">點擊下方按鈕分析此筆</span></div>
+        <button class="primary detail-analyze-btn" id="d-analyze-btn" onclick="analyzeSingle()">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="currentColor"><path d="M7 1a6 6 0 100 12A6 6 0 007 1zm-.5 3.5h1v3.25l2.1 1.21-.5.87L6.5 8.12V4.5z"/></svg>
+          分析此筆測試項目
+        </button>
+      </div>
+    </div>
+  </aside>
+  </div><!-- /content-area -->
+
+</main>
 </div>
 
 <script>
@@ -700,7 +770,17 @@ function renderKPage() {
         <div class="k-sub">${item.applicant || ""} · ${date}</div>
       </div>
       <div class="k-check"></div>`;
-    el.onclick = () => toggleK(item.k_number, el);
+    el.onclick = (e) => {
+      // If clicking the checkbox area, toggle; otherwise open detail
+      if (e.target.classList.contains("k-check") || e.target.closest(".k-check")) {
+        toggleK(item.k_number, el);
+      } else {
+        openDetail(item);
+        // Highlight selected
+        document.querySelectorAll(".k-item").forEach(x => x.classList.remove("detail-active"));
+        el.classList.add("detail-active");
+      }
+    };
     list.appendChild(el);
   });
   // Async translate names in background
@@ -946,6 +1026,111 @@ function showProxyHelp() {
 }
 
 $("kw-input").addEventListener("keydown", e => { if (e.key === "Enter") searchCodes(); });
+
+// ─── Detail Panel ─────────────────────────────────────────
+let detailItem = null;
+
+async function openDetail(item) {
+  detailItem = item;
+  $("detail-empty").style.display = "none";
+  $("detail-content").style.display = "block";
+  $("content-area").classList.add("has-detail");
+
+  const knum = item.k_number || "";
+  const date = (item.decision_date || "").substring(0, 10);
+  const zh = zhNameCache[knum] || ZH_MAP[selectedCode] || "";
+
+  $("d-knum").textContent = knum;
+  $("d-name").textContent = item.device_name || "";
+  $("d-zh").textContent = zh;
+  $("d-applicant").textContent = item.applicant || "—";
+  $("d-date").textContent = date || "—";
+  $("d-class").textContent = item.device_class ? `Class ${item.device_class}` : "—";
+  $("d-reg").textContent = item.openfda?.regulation_number?.[0] || item.regulation_number || "—";
+  $("d-type").textContent = item.clearance_type || item.submission_type_id || "—";
+
+  const pdfUrl = kToPdfUrl(knum);
+  $("d-links").innerHTML = `
+    <a href="${pdfUrl}" target="_blank" rel="noopener">PDF ↗</a>
+    <a href="https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfpmn/pmn.cfm?ID=${knum}" target="_blank" rel="noopener">FDA ↗</a>`;
+
+  // Predicate devices
+  const predEl = $("d-predicates");
+  predEl.innerHTML = "";
+  const preds = item.predicate_device_name || item.openfda?.predicate_device_name || [];
+  if (preds.length) {
+    preds.forEach(p => {
+      const d = document.createElement("div");
+      d.className = "detail-predicate";
+      d.textContent = p;
+      predEl.appendChild(d);
+    });
+  } else if (item.predicate_510k_number) {
+    const d = document.createElement("div");
+    d.className = "detail-predicate";
+    d.textContent = item.predicate_510k_number;
+    predEl.appendChild(d);
+  } else {
+    predEl.innerHTML = `<span style="font-size:12px; color:var(--text3);">無公開資料</span>`;
+  }
+
+  // Reset tests section
+  $("d-tests").innerHTML = `<span style="font-size:12px; color:var(--text3);">點擊下方按鈕分析此筆</span>`;
+  $("d-analyze-btn").disabled = false;
+  $("d-analyze-btn").textContent = "分析此筆測試項目";
+
+  // If already analyzed, show results
+  const existing = analysisResults.find(r => r.k_number === knum);
+  if (existing?.tests?.length) renderDetailTests(existing.tests);
+}
+
+function renderDetailTests(tests) {
+  const el = $("d-tests");
+  if (!tests.length) { el.innerHTML = `<span style="font-size:12px; color:var(--text3);">未找到測試項目</span>`; return; }
+  const tags = tests.map(t => {
+    const en = typeof t === "object" ? (t.en || "") : t;
+    const zh = typeof t === "object" ? (t.zh || "") : "";
+    const hasStd = /ISO|ASTM|IEC|AAMI/i.test(en);
+    return `<span class="detail-test-tag${hasStd ? " iso" : ""}">${zh || en}</span>`;
+  }).join("");
+  el.innerHTML = `<div style="line-height:2;">${tags}</div>`;
+  $("d-analyze-btn").style.display = "none";
+}
+
+async function analyzeSingle() {
+  const key = getKey();
+  if (!key) { alert("請先填入 Anthropic API Key"); return; }
+  if (!detailItem) return;
+
+  $("d-analyze-btn").disabled = true;
+  $("d-analyze-btn").textContent = "分析中…";
+  $("d-tests").innerHTML = `<span class="parsing-label" style="font-size:12px;">AI 解析中…</span>`;
+
+  const knum = detailItem.k_number;
+  try {
+    let tests = [];
+    const proxy = getProxy();
+    const card = { querySelector: () => ({ textContent: "" }) }; // dummy
+    if (proxy) {
+      tests = await analyzeViaPdf(knum, detailItem, key, proxy, card);
+    } else {
+      tests = await analyzeViaName(knum, detailItem, key);
+    }
+    renderDetailTests(tests);
+    // Also add to analysisResults
+    const idx = analysisResults.findIndex(r => r.k_number === knum);
+    const entry = { k_number: knum, device_name: detailItem.device_name || "", applicant: detailItem.applicant || "", decision_date: (detailItem.decision_date || "").substring(0, 10), tests, pdf_url: kToPdfUrl(knum) };
+    if (idx >= 0) analysisResults[idx] = entry; else analysisResults.push(entry);
+    // Also check/add to Step 3 checked set and refresh
+    checked.add(knum);
+    updateSelChip();
+    if (analysisResults.some(r => r.tests.length)) $("export-row").style.display = "flex";
+  } catch(e) {
+    $("d-tests").innerHTML = `<span style="font-size:12px; color:var(--red);">錯誤：${e.message}</span>`;
+    $("d-analyze-btn").disabled = false;
+    $("d-analyze-btn").textContent = "重試";
+  }
+}
 // ─── Login ────────────────────────────────────────────────
 const PASS_HASH = "3ebfff9091f45a3b71ed6d76212914d125a1d751900a26ef38e619c7247d8b4f";
 
