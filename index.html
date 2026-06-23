@@ -639,6 +639,19 @@ function clearCompanyFilter() {
   renderKPage();
 }
 
+const zhNameCache = {};
+
+async function fetchZhName(knum, enName) {
+  if (zhNameCache[knum]) return zhNameCache[knum];
+  // Use ZH_MAP for product code first
+  const code = selectedCode;
+  if (ZH_MAP[code]) {
+    zhNameCache[knum] = ZH_MAP[code];
+    return ZH_MAP[code];
+  }
+  return "";
+}
+
 function renderKPage() {
   const list = $("k-list"); list.innerHTML = "";
   const slice = kData.slice(kPage * PAGE, (kPage + 1) * PAGE);
@@ -647,10 +660,11 @@ function renderKPage() {
     el.className = "k-item" + (checked.has(item.k_number) ? " checked" : "");
     el.id = "ki-" + item.k_number;
     const date = (item.decision_date || "").substring(0, 10);
+    const zhCode = ZH_MAP[selectedCode] || "";
     el.innerHTML = `
       <div class="k-num">${item.k_number}</div>
       <div class="k-meta">
-        <div class="k-name">${item.device_name || ""}</div>
+        <div class="k-name">${item.device_name || ""}${zhCode ? `<span class="zh-tag">／${zhCode}</span>` : ""}</div>
         <div class="k-sub">${item.applicant || ""} · ${date}</div>
       </div>
       <div class="k-check"></div>`;
@@ -767,10 +781,10 @@ async function analyzeViaName(knum, item, key) {
   const date = (item?.decision_date || "").substring(0, 10);
   const prompt = `You are analyzing an FDA 510(k) submission for: "${name}" by ${applicant} (${knum}, ${date}).
 
-Based on your knowledge of typical 510(k) performance testing for this device type, list the functional and performance tests that would be required. Include ISO/ASTM standard numbers where commonly applicable.
+Based on your knowledge of typical 510(k) performance testing for this device type, list the functional and performance tests. Include ISO/ASTM standard numbers where applicable.
 
-Respond ONLY with a JSON array of strings. No explanation, no markdown fences.
-Example: ["Tensile strength","Dimensional verification","ISO 10993-5 Cytotoxicity","ASTM F2132 Kink resistance"]`;
+Respond ONLY with a JSON array of objects with "en" and "zh" keys. No explanation, no markdown fences.
+Example: [{"en":"Tensile strength","zh":"拉伸強度"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Dimensional verification","zh":"尺寸驗證"}]`;
 
   return await claudeCall(prompt, key);
 }
@@ -786,8 +800,8 @@ ${excerpt}
 
 Extract ALL functional/performance tests mentioned. Include ISO and ASTM standard numbers exactly as written. If the document lists a test table, extract every row.
 
-Respond ONLY with a JSON array of test name strings. No explanation, no markdown fences.
-Example: ["Tensile strength (ASTM F2132)","ISO 10993-5 Cytotoxicity","Sterility (ISO 11135)","Dimensional verification"]`;
+Respond ONLY with a JSON array of objects with "en" (English test name) and "zh" (Traditional Chinese translation) keys. No explanation, no markdown fences.
+Example: [{"en":"Tensile strength (ASTM F2132)","zh":"拉伸強度 (ASTM F2132)"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Sterility (ISO 11135)","zh":"無菌性驗證 (ISO 11135)"}]`;
 
   return await claudeCall(prompt, key);
 }
@@ -841,8 +855,11 @@ function renderCardTests(card, tests, knum, item) {
   const body = card.querySelector(".result-card-body");
   if (!tests.length) { body.innerHTML = '<div class="no-test">未找到測試項目（Summary 可能未公開）</div>'; return; }
   const tags = tests.map(t => {
-    const hasStd = /ISO|ASTM|IEC|EN\s?[\d]|AAMI/i.test(t);
-    return `<span class="test-tag${hasStd ? " iso" : ""}">${t}</span>`;
+    const en = typeof t === "object" ? (t.en || "") : t;
+    const zh = typeof t === "object" ? (t.zh || "") : "";
+    const hasStd = /ISO|ASTM|IEC|EN\s?[\d]|AAMI/i.test(en);
+    const label = zh ? `${zh}<span style="opacity:0.6; font-size:11px; margin-left:4px;">${en}</span>` : en;
+    return `<span class="test-tag${hasStd ? " iso" : ""}">${label}</span>`;
   }).join("");
   body.innerHTML = `<div class="test-tags">${tags}</div>`;
 }
@@ -860,7 +877,11 @@ function exportJSON() {
 function exportCSV() {
   const rows = [["k_number","device_name","applicant","decision_date","test_name","pdf_url"]];
   analysisResults.forEach(r => {
-    if (r.tests.length) r.tests.forEach(t => rows.push([r.k_number, r.device_name, r.applicant, r.decision_date, t, r.pdf_url]));
+    if (r.tests.length) r.tests.forEach(t => {
+      const en = typeof t === "object" ? (t.en || "") : t;
+      const zh = typeof t === "object" ? (t.zh || "") : "";
+      rows.push([r.k_number, r.device_name, r.applicant, r.decision_date, zh ? `${zh} ${en}` : en, r.pdf_url]);
+    });
     else rows.push([r.k_number, r.device_name, r.applicant, r.decision_date, "", r.pdf_url]);
   });
   const csv = rows.map(r => r.map(c => `"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
