@@ -1659,7 +1659,8 @@ async function openDetail(item) {
   $("d-type").textContent = item.clearance_type || item.submission_type_id || "—";
 
   // ── Device Classification Name (來自 openfda 調和欄位，跟 510k 本身的 device_name 不同) ──
-  const classNameRaw = (item.openfda?.device_name || [])[0] || "";
+  // 注意：openfda.device_name 依 FDA 官方欄位文件是字串型態，不是陣列，不能用 [0] 索引
+  const classNameRaw = item.openfda?.device_name || "";
   if (classNameRaw) {
     $("d-classname-section").style.display = "block";
     $("d-classname").textContent = classNameRaw;
@@ -1703,7 +1704,8 @@ async function openDetail(item) {
   }
 
   // ── Regulation Medical Specialty ──
-  const specialtyRaw = (item.openfda?.medical_specialty_description || [])[0] || item.openfda?.medical_specialty_description || "";
+  // 同樣注意：openfda.medical_specialty_description 是字串型態，不是陣列
+  const specialtyRaw = item.openfda?.medical_specialty_description || "";
   if (specialtyRaw) {
     $("d-specialty-row").style.display = "flex";
     $("d-specialty").textContent = specialtyRaw;
