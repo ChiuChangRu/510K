@@ -230,6 +230,24 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 /* Export */
 .export-row { display: flex; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 
+/* ─── Printable report (僅列印/另存 PDF 時顯示) ───────────── */
+#report-view { display: none; }
+#report-view h1 { font-size: 18px; margin-bottom: 4px; }
+#report-view .report-meta { font-size: 12px; color: #555; margin-bottom: 18px; }
+#report-view h2 { font-size: 14px; margin: 18px 0 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+#report-view table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+#report-view th, #report-view td { border: 1px solid #999; padding: 4px 6px; text-align: left; vertical-align: top; }
+#report-view th { background: #eee; }
+#report-view .report-note { font-size: 11px; color: #777; }
+@media print {
+  body * { visibility: hidden; }
+  #report-view, #report-view * { visibility: visible; }
+  #report-view {
+    display: block; position: absolute; top: 0; left: 0; width: 100%;
+    background: #fff; color: #000; padding: 16px;
+  }
+}
+
 /* Filter groups */
 .filter-group-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin-bottom: 5px; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 2px; }
@@ -245,6 +263,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 .detail-section { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 0.5px solid var(--border); }
 .detail-section:last-child { border-bottom: none; }
 .detail-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
+.detail-zh-ref { font-size: 12px; color: var(--text2); margin-top: 2px; margin-bottom: 4px; padding-left: 2px; border-left: 2px solid var(--border2); padding-left: 6px; }
 .detail-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; gap: 8px; }
 .detail-row .label { color: var(--text2); flex-shrink: 0; }
 .detail-row .value { color: var(--text); text-align: right; font-family: var(--mono); font-size: 12px; }
@@ -454,6 +473,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
         <button onclick="exportJSON()">↓ JSON</button>
         <button onclick="exportCSV()">↓ CSV</button>
         <button onclick="exportMarkdown()">↓ Markdown</button>
+        <button class="primary" onclick="downloadReportPDF()">↓ 報告 PDF</button>
       </div>
     </div>
   </main>
@@ -470,12 +490,26 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
       <div class="detail-zh" id="d-zh"></div>
       <div class="detail-links" id="d-links"></div>
 
+      <div class="detail-section" id="d-classname-section" style="display:none;">
+        <div class="detail-section-title">器材分類名稱 (Device Classification Name)</div>
+        <div id="d-classname" style="font-size:13px; line-height:1.5;"></div>
+        <div id="d-classname-zh" class="detail-zh-ref" style="display:none;"></div>
+      </div>
+
       <div class="detail-section">
         <div class="detail-section-title">基本資訊</div>
         <div class="detail-row"><span class="label">申請廠商</span><span class="value" id="d-applicant"></span></div>
+        <div class="detail-row" id="d-address-row" style="display:none;"><span class="label">廠商地址</span><span class="value" id="d-address"></span></div>
+        <div class="detail-row" id="d-contact-row" style="display:none;"><span class="label">聯絡人</span><span class="value" id="d-contact"></span></div>
+        <div class="detail-row" id="d-received-row" style="display:none;"><span class="label">收件日期</span><span class="value" id="d-received"></span></div>
         <div class="detail-row"><span class="label">清關日期</span><span class="value" id="d-date"></span></div>
+        <div class="detail-row" id="d-decision-row" style="display:none;"><span class="label">決定 (Decision)</span><span class="value" id="d-decision"></span></div>
         <div class="detail-row"><span class="label">器材類別</span><span class="value" id="d-class"></span></div>
         <div class="detail-row"><span class="label">Regulation</span><span class="value" id="d-reg"></span></div>
+        <div class="detail-row" id="d-specialty-row" style="display:none;"><span class="label">Medical Specialty</span><span class="value" id="d-specialty"></span></div>
+        <div id="d-specialty-zh" class="detail-zh-ref" style="display:none;"></div>
+        <div class="detail-row" id="d-panel-row" style="display:none;"><span class="label">Review Panel</span><span class="value" id="d-panel"></span></div>
+        <div id="d-panel-zh" class="detail-zh-ref" style="display:none;"></div>
         <div class="detail-row"><span class="label">提交類型</span><span class="value" id="d-type"></span></div>
       </div>
 
@@ -498,6 +532,9 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 
 </main>
 </div>
+
+<!-- 列印專用報告容器：平時隱藏，downloadReportPDF() 會填內容後觸發 window.print() -->
+<div id="report-view"></div>
 
 <script>
 // ─── Config ───────────────────────────────────────────────
@@ -1049,13 +1086,14 @@ async function analyzeSelected() {
     $("test-results").insertBefore(card, $("test-results").firstChild);
 
     try {
-      let tests = [];
+      let extraction;
       const proxy = getProxy();
       if (proxy) {
-        tests = await analyzeViaPdf(knum, item, key, proxy, card);
+        extraction = await analyzeViaPdf(knum, item, key, proxy, card);
       } else {
-        tests = await analyzeViaName(knum, item, key);
+        extraction = await analyzeViaName(knum, item, key);
       }
+      const { tests, indications, indications_zh } = extraction;
       renderCardTests(card, tests, knum, item);
       const entry = {
         k_number: knum,
@@ -1066,6 +1104,9 @@ async function analyzeSelected() {
         models: extractModels(item?.device_name || ""),
         decision_date: (item?.decision_date || "").substring(0, 10),
         tests,
+        indications,
+        indications_zh,
+        via_pdf: !!proxy,
         pdf_url: kToPdfUrl(knum),
         analyzed_at: new Date().toISOString()
       };
@@ -1073,7 +1114,7 @@ async function analyzeSelected() {
       analysisResults.push(entry);
     } catch(e) {
       renderCardError(card, e.message);
-      analysisResults.push({ k_number: knum, device_name: item?.device_name || "", applicant: "", decision_date: "", tests: [], error: e.message });
+      analysisResults.push({ k_number: knum, device_name: item?.device_name || "", applicant: "", decision_date: "", tests: [], indications: "", indications_zh: "", error: e.message });
     }
   }
 
@@ -1122,29 +1163,52 @@ async function analyzeViaName(knum, item, key) {
   const date = (item?.decision_date || "").substring(0, 10);
   const prompt = `You are analyzing an FDA 510(k) submission for: "${name}" by ${applicant} (${knum}, ${date}).
 
-Based on your knowledge of typical 510(k) performance testing for this device type, list the functional and performance tests. Include ISO/ASTM standard numbers where applicable.
+You do NOT have the actual 510(k) Summary PDF — only the device name above. Because of this:
+1. "indications" and "indications_zh" MUST be empty strings "" — do not guess or infer the Indications for Use, since you cannot verify it without the source document.
+2. Based on your knowledge of typical 510(k) performance testing for this device type, list the functional and performance tests in "tests". Include ISO/ASTM standard numbers where applicable.
 
-CRITICAL: Output ONLY the raw JSON array. Do not write any introduction, explanation, caveat, or markdown fence — your entire response must start with "[" and end with "]".
-Example: [{"en":"Tensile strength","zh":"拉伸強度"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Dimensional verification","zh":"尺寸驗證"}]`;
+CRITICAL: Output ONLY the raw JSON object below. Do not write any introduction, explanation, caveat, or markdown fence — your entire response must start with "{" and end with "}".
+Format: {"indications":"","indications_zh":"","tests":[{"en":"Tensile strength","zh":"拉伸強度"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Dimensional verification","zh":"尺寸驗證"}]}`;
 
-  return await claudeCall(prompt, key, 3000);
+  const result = await claudeCall(prompt, key, 3000);
+  return normalizeExtraction(result);
 }
 
 async function claudeExtract(pdfText, deviceName, key) {
   const excerpt = pdfText.substring(0, 12000);
-  const prompt = `You are extracting performance testing information from an FDA 510(k) Summary document for a medical device: "${deviceName}".
+  const prompt = `You are extracting information from an FDA 510(k) Summary document for a medical device: "${deviceName}".
 
 Here is the text from the 510(k) Summary PDF:
 ---
 ${excerpt}
 ---
 
-Extract ALL functional/performance tests mentioned. Include ISO and ASTM standard numbers exactly as written. If the document lists a test table, extract every row.
+Extract:
+1. "indications" — the Indications for Use / Intended Use statement, as concisely as possible (1-3 sentences) while staying faithful to the document's actual wording. If the document does not state this, use "".
+2. "indications_zh" — Traditional Chinese translation of the above. If "indications" is "", this must also be "".
+3. "tests" — ALL functional/performance tests mentioned. Include ISO and ASTM standard numbers exactly as written. If the document lists a test table, extract every row.
 
-CRITICAL: Output ONLY the raw JSON array. Do not write any introduction, explanation, caveat, or markdown fence — your entire response must start with "[" and end with "]".
-Example: [{"en":"Tensile strength (ASTM F2132)","zh":"拉伸強度 (ASTM F2132)"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Sterility (ISO 11135)","zh":"無菌性驗證 (ISO 11135)"}]`;
+CRITICAL: Output ONLY the raw JSON object below. Do not write any introduction, explanation, caveat, or markdown fence — your entire response must start with "{" and end with "}".
+Format: {"indications":"...","indications_zh":"...","tests":[{"en":"Tensile strength (ASTM F2132)","zh":"拉伸強度 (ASTM F2132)"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Sterility (ISO 11135)","zh":"無菌性驗證 (ISO 11135)"}]}`;
 
-  return await claudeCall(prompt, key, 3000);
+  const result = await claudeCall(prompt, key, 3000);
+  return normalizeExtraction(result);
+}
+
+// 統一回傳格式，不管 AI 真的吐物件還是退化吐成陣列(parseJsonLoose 修復失敗時的最後手段)，
+// 呼叫端永遠拿到 { indications, indications_zh, tests } 這個形狀，不必各自判斷。
+function normalizeExtraction(result) {
+  if (Array.isArray(result)) {
+    return { indications: "", indications_zh: "", tests: result };
+  }
+  if (result && typeof result === "object") {
+    return {
+      indications: result.indications || "",
+      indications_zh: result.indications_zh || "",
+      tests: Array.isArray(result.tests) ? result.tests : []
+    };
+  }
+  return { indications: "", indications_zh: "", tests: [] };
 }
 
 async function claudeCall(prompt, key, maxTokens = 2000) {
@@ -1168,7 +1232,8 @@ async function claudeCall(prompt, key, maxTokens = 2000) {
 
 // ─── Robust JSON salvage ────────────────────────────────────
 // Handles: clean JSON / JSON wrapped in markdown fences / JSON with
-// leading explanatory prose / JSON truncated mid-object due to max_tokens.
+// leading explanatory prose / JSON truncated mid-structure due to max_tokens
+// (including nested cases like {"indications":"...","tests":[{...},{...}, <cut>).
 function parseJsonLoose(raw) {
   const clean = raw.replace(/```json|```/g, "").trim();
 
@@ -1178,31 +1243,41 @@ function parseJsonLoose(raw) {
   // 2) strip any leading prose: find first [ or { and parse from there
   const startIdx = clean.search(/[\[{]/);
   if (startIdx === -1) return lineFallback(clean);
-  const opener = clean[startIdx];
-  let sub = clean.slice(startIdx);
+  const sub = clean.slice(startIdx);
 
   try { return JSON.parse(sub); } catch {}
 
-  // 3) truncated mid-object: walk back to the last complete "}" and
-  // try closing the structure there, dropping only the unfinished tail
-  if (opener === "[") {
-    for (let i = sub.length - 1; i >= 0; i--) {
-      if (sub[i] !== "}") continue;
-      const candidate = sub.slice(0, i + 1) + "]";
-      try {
-        const parsed = JSON.parse(candidate);
-        if (Array.isArray(parsed) && parsed.length) return parsed;
-      } catch {}
+  // 3) truncated mid-structure: walk forward tracking bracket depth (ignoring
+  // brackets inside quoted strings), remember the last point where a value
+  // had just fully closed while still nested inside something else — that's
+  // the safest place to cut — then close the remaining open brackets in the
+  // correct reverse order.
+  const stack = [];
+  let inStr = false, esc = false;
+  let lastSafeCut = -1, lastSafeStack = null;
+  for (let i = 0; i < sub.length; i++) {
+    const c = sub[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
     }
-  } else {
-    for (let i = sub.length - 1; i >= 0; i--) {
-      if (sub[i] !== "}" && sub[i] !== "]") continue;
-      const candidate = sub.slice(0, i + 1) + "}";
-      try {
-        const parsed = JSON.parse(candidate);
-        if (parsed && typeof parsed === "object") return parsed;
-      } catch {}
+    if (c === '"') { inStr = true; continue; }
+    if (c === "{" || c === "[") { stack.push(c); continue; }
+    if (c === "}" || c === "]") {
+      stack.pop();
+      if (stack.length > 0) { lastSafeCut = i; lastSafeStack = stack.slice(); }
     }
+  }
+  if (lastSafeCut >= 0) {
+    const closers = lastSafeStack.slice().reverse().map(ch => ch === "{" ? "}" : "]").join("");
+    const candidate = sub.slice(0, lastSafeCut + 1) + closers;
+    try {
+      const parsed = JSON.parse(candidate);
+      const hasContent = Array.isArray(parsed) ? parsed.length : (parsed && typeof parsed === "object");
+      if (hasContent) return parsed;
+    } catch {}
   }
 
   // 4) last resort: cleaned line list (never show raw JSON fragments)
@@ -1212,7 +1287,7 @@ function parseJsonLoose(raw) {
 function lineFallback(text) {
   return text.split("\n")
     .map(l => l.replace(/^[-"*\d.\[\{]+\s*/, "").replace(/[",\]\}]+\s*$/, "").trim())
-    .filter(l => l && !/^["']?(en|zh)["']?\s*:/i.test(l) && l !== "[" && l !== "]" && l !== "{" && l !== "}");
+    .filter(l => l && !/^["']?(en|zh|indications\w*)["']?\s*:/i.test(l) && l !== "[" && l !== "]" && l !== "{" && l !== "}");
 }
 
 // ─── Card rendering ────────────────────────────────────────
@@ -1441,6 +1516,76 @@ function dl(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click();
 }
 
+// ─── PDF 報告（瀏覽器原生列印 → 另存為 PDF，中文不需處理字型）──────────
+function escHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+}
+
+function buildReportHTML() {
+  const devs = analysisResults.filter(r => r.tests && r.tests.length);
+  const now = new Date().toISOString().substring(0, 10);
+  const titleCode = selectedCode ? `（Product Code: ${escHtml(selectedCode)}）` : "";
+
+  const ovRows = devs.map(r => {
+    const models = (r.models && r.models.length) ? escHtml(r.models.slice(0, 5).join(", ")) : "—";
+    let indicationCell;
+    if (r.indications_zh) {
+      indicationCell = `${escHtml(r.indications_zh)}<div class="report-note">${escHtml(r.indications || "")}</div>`;
+    } else if (r.via_pdf) {
+      indicationCell = `<span class="report-note">PDF 未提供明確 Indications for Use 陳述</span>`;
+    } else {
+      indicationCell = `<span class="report-note">未讀取 PDF，無法擷取適應症</span>`;
+    }
+    return `<tr>
+      <td>${escHtml(r.k_number)}</td>
+      <td>${escHtml(r.device_name_zh || "")}${r.device_name_zh ? `<div class="report-note">${escHtml(r.device_name || "")}</div>` : escHtml(r.device_name || "")}</td>
+      <td>${escHtml(r.applicant || "—")}</td>
+      <td>${models}</td>
+      <td>${indicationCell}</td>
+      <td style="white-space:nowrap;">${escHtml(r.decision_date || "—")}</td>
+    </tr>`;
+  }).join("");
+
+  // 直接複用畫面上已經算好的綜整矩陣（沒有就提示需先產生）
+  const matrixBody = document.querySelector("#synth-matrix .synth-body");
+  let matrixHTML;
+  if (matrixBody && matrixBody.querySelector(".mx-table")) {
+    matrixHTML = matrixBody.querySelector(".mx-table").outerHTML;
+  } else if (devs.length < 2) {
+    matrixHTML = `<p class="report-note">僅 ${devs.length} 筆裝置有測試項目，需 2 筆以上才能產生比對矩陣。</p>`;
+  } else {
+    matrixHTML = `<p class="report-note">尚未產生綜整矩陣，請先在畫面上完成「驗證項目綜整」後再下載報告。</p>`;
+  }
+
+  const viaPdfCount = devs.filter(r => r.via_pdf).length;
+
+  return `
+    <h1>FDA 510(k) 功能性驗證分析報告${titleCode}</h1>
+    <p class="report-meta">產出日期：${now}　|　裝置筆數：${devs.length}　|　其中 ${viaPdfCount} 筆經 PDF 全文分析、${devs.length - viaPdfCount} 筆僅憑器材名稱推斷</p>
+
+    <h2>檢索資料概況</h2>
+    <table>
+      <thead><tr><th>510(k)</th><th>器材名稱</th><th>申請廠商</th><th>型號</th><th>適應症 (Indications for Use)</th><th>取證日期</th></tr></thead>
+      <tbody>${ovRows || `<tr><td colspan="6">尚無已分析裝置</td></tr>`}</tbody>
+    </table>
+
+    <h2>功能性驗證比對表</h2>
+    ${matrixHTML}
+
+    <p class="report-note">本報告由 FDA 510(k) Performance Test Explorer 自動生成，測試項目與適應症摘要由 AI 自原始 510(k) PDF 或器材名稱推斷，僅供內部研究參考，正式法規文件仍須核對 FDA 原始 PDF。</p>
+  `;
+}
+
+function downloadReportPDF() {
+  if (!analysisResults.some(r => r.tests && r.tests.length)) {
+    alert("尚無已分析的測試項目，請先完成 Step 3 分析。");
+    return;
+  }
+  $("report-view").innerHTML = buildReportHTML();
+  // 等 DOM 真的畫出來才觸發列印，避免某些瀏覽器列印到空白頁
+  requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+}
+
 // ─── Misc ──────────────────────────────────────────────────
 function showProxyHelp() {
   alert("Cloudflare Worker 部署步驟：\n\n1. 前往 https://dash.cloudflare.com\n2. Workers & Pages → Create Worker\n3. 貼上 worker.js 內容並 Deploy\n4. 複製 Worker URL 貼入左側欄位\n\nWorker 檔案位於本 repo 的 worker.js");
@@ -1451,6 +1596,21 @@ $("kw-input").addEventListener("keydown", e => { if (e.key === "Enter") searchCo
 
 // ─── Detail Panel ─────────────────────────────────────────
 let detailItem = null;
+
+// 共用：把英文欄位丟給 MyMemory 翻成中文，顯示在指定的對照行裡
+async function setRefTranslation(elId, enText) {
+  const el = $(elId);
+  if (!el || !enText) { if (el) el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.textContent = "翻譯中…";
+  try {
+    const zh = await myMemoryTranslate(enText);
+    el.textContent = zh ? `中譯參考：${zh}` : "（翻譯無回應）";
+    if (!zh) el.style.display = "none";
+  } catch {
+    el.style.display = "none";
+  }
+}
 
 async function openDetail(item) {
   detailItem = item;
@@ -1470,6 +1630,72 @@ async function openDetail(item) {
   $("d-class").textContent = item.device_class ? `Class ${item.device_class}` : "—";
   $("d-reg").textContent = item.openfda?.regulation_number?.[0] || item.regulation_number || "—";
   $("d-type").textContent = item.clearance_type || item.submission_type_id || "—";
+
+  // ── Device Classification Name (來自 openfda 調和欄位，跟 510k 本身的 device_name 不同) ──
+  const classNameRaw = (item.openfda?.device_name || [])[0] || "";
+  if (classNameRaw) {
+    $("d-classname-section").style.display = "block";
+    $("d-classname").textContent = classNameRaw;
+    setRefTranslation("d-classname-zh", classNameRaw);
+  } else {
+    $("d-classname-section").style.display = "none";
+  }
+
+  // ── 完整地址 ──
+  const addrParts = [item.address_1, item.address_2, item.city, item.state, item.zip_code, item.country_code].filter(Boolean);
+  if (addrParts.length) {
+    $("d-address-row").style.display = "flex";
+    $("d-address").textContent = addrParts.join(", ");
+  } else {
+    $("d-address-row").style.display = "none";
+  }
+
+  // ── 聯絡人 ──
+  if (item.contact) {
+    $("d-contact-row").style.display = "flex";
+    $("d-contact").textContent = item.contact;
+  } else {
+    $("d-contact-row").style.display = "none";
+  }
+
+  // ── 收件日期 ──
+  if (item.date_received) {
+    $("d-received-row").style.display = "flex";
+    $("d-received").textContent = item.date_received.substring(0, 10);
+  } else {
+    $("d-received-row").style.display = "none";
+  }
+
+  // ── 決定（Decision，含 SESE 等代碼）──
+  const decisionTxt = item.decision_description || item.decision_code || "";
+  if (decisionTxt) {
+    $("d-decision-row").style.display = "flex";
+    $("d-decision").textContent = item.decision_code ? `${decisionTxt} (${item.decision_code})` : decisionTxt;
+  } else {
+    $("d-decision-row").style.display = "none";
+  }
+
+  // ── Regulation Medical Specialty ──
+  const specialtyRaw = (item.openfda?.medical_specialty_description || [])[0] || item.openfda?.medical_specialty_description || "";
+  if (specialtyRaw) {
+    $("d-specialty-row").style.display = "flex";
+    $("d-specialty").textContent = specialtyRaw;
+    setRefTranslation("d-specialty-zh", specialtyRaw);
+  } else {
+    $("d-specialty-row").style.display = "none";
+    $("d-specialty-zh").style.display = "none";
+  }
+
+  // ── 510(k) Review Panel ──
+  const panelRaw = item.review_advisory_committee || item.advisory_committee_description || "";
+  if (panelRaw) {
+    $("d-panel-row").style.display = "flex";
+    $("d-panel").textContent = panelRaw;
+    setRefTranslation("d-panel-zh", panelRaw);
+  } else {
+    $("d-panel-row").style.display = "none";
+    $("d-panel-zh").style.display = "none";
+  }
 
   const pdfUrl = kToPdfUrl(knum);
   $("d-links").innerHTML = `
@@ -1530,19 +1756,30 @@ async function analyzeSingle() {
 
   const knum = detailItem.k_number;
   try {
-    let tests = [];
+    let extraction;
     const proxy = getProxy();
     const card = { querySelector: () => ({ textContent: "" }) }; // dummy
     if (proxy) {
-      tests = await analyzeViaPdf(knum, detailItem, key, proxy, card);
+      extraction = await analyzeViaPdf(knum, detailItem, key, proxy, card);
     } else {
-      tests = await analyzeViaName(knum, detailItem, key);
+      extraction = await analyzeViaName(knum, detailItem, key);
     }
+    const { tests, indications, indications_zh } = extraction;
     renderDetailTests(tests);
     // Also add to analysisResults
     const idx = analysisResults.findIndex(r => r.k_number === knum);
-    const entry = { k_number: knum, device_name: detailItem.device_name || "", applicant: detailItem.applicant || "", decision_date: (detailItem.decision_date || "").substring(0, 10), tests, pdf_url: kToPdfUrl(knum) };
+    const entry = {
+      k_number: knum,
+      device_name: detailItem.device_name || "",
+      device_name_zh: zhNameCache[knum] || "",
+      applicant: detailItem.applicant || "",
+      models: extractModels(detailItem.device_name || ""),
+      decision_date: (detailItem.decision_date || "").substring(0, 10),
+      tests, indications, indications_zh, via_pdf: !!proxy,
+      pdf_url: kToPdfUrl(knum)
+    };
     if (idx >= 0) analysisResults[idx] = entry; else analysisResults.push(entry);
+    if (tests.length) saveReport({ ...entry, product_code: selectedCode || "", analyzed_at: new Date().toISOString() });
     // Also check/add to Step 3 checked set and refresh
     checked.add(knum);
     updateSelChip();
