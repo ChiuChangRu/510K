@@ -360,6 +360,9 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
         <span id="hist-caret" style="color:var(--text3);">▸</span>
       </div>
       <div id="hist-body" style="display:none; margin-top:10px;">
+        <select id="hist-select" onchange="if(this.value) loadHistory(this.value)" style="width:100%; margin-bottom:8px;">
+          <option value="">— 選擇已分析紀錄 —</option>
+        </select>
         <input type="text" id="hist-search" placeholder="搜尋 代碼 / 中文名 / 英文名 / 廠牌 / 型號…" oninput="renderHistory()" style="width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface2); color:var(--text); font-size:13px; box-sizing:border-box;" />
         <div id="hist-list" style="margin-top:8px;"></div>
       </div>
@@ -885,9 +888,26 @@ function extractModels(name) {
 }
 function refreshHistCount() {
   const el = document.getElementById("hist-count");
-  if (!el) return;
-  const n = Object.keys(loadReports()).length;
-  el.textContent = n ? `(${n} 筆)` : "(尚無)";
+  if (el) {
+    const n = Object.keys(loadReports()).length;
+    el.textContent = n ? `(${n} 筆)` : "(尚無)";
+  }
+  populateHistSelect();
+}
+function populateHistSelect() {
+  const sel = document.getElementById("hist-select");
+  if (!sel) return;
+  const all = Object.values(loadReports()).sort((a, b) => (b.analyzed_at || "").localeCompare(a.analyzed_at || ""));
+  const cur = sel.value;
+  let opts = `<option value="">— 選擇已分析紀錄 (${all.length}) —</option>`;
+  opts += all.map(e => {
+    const full = e.device_name_zh || e.device_name || "";
+    const nm = full.slice(0, 36) + (full.length > 36 ? "…" : "");
+    const label = `${e.k_number} · ${e.product_code || "?"} · ${nm} · ${e.applicant || ""}`.replace(/</g, "");
+    return `<option value="${e.k_number}">${label}</option>`;
+  }).join("");
+  sel.innerHTML = opts;
+  if (cur && all.some(e => e.k_number === cur)) sel.value = cur;
 }
 
 function normalizeDeviceName(name) {
@@ -1289,7 +1309,7 @@ function toggleHistory() {
   const open = b.style.display === "none";
   b.style.display = open ? "block" : "none";
   c.textContent = open ? "▾" : "▸";
-  if (open) renderHistory();
+  if (open) { populateHistSelect(); renderHistory(); }
 }
 function renderHistory() {
   const list = $("hist-list");
@@ -1331,6 +1351,7 @@ function loadHistory(knum) {
   if (hdr) hdr.insertAdjacentHTML("beforeend", `<span class="cache-badge" title="本機快取回叫,未花費 API">快取</span>`);
   setStatus("analyze-status", `已從本機快取載入 ${knum}(未花費 API)`, "ok");
   $("export-row").style.display = "flex";
+  const sel = document.getElementById("hist-select"); if (sel) sel.value = knum;
   card.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
