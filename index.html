@@ -190,10 +190,40 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 .result-card-links a { font-size: 11px; color: var(--teal); text-decoration: none; padding: 3px 8px; border: 1px solid var(--teal-border); border-radius: var(--radius); white-space: nowrap; }
 .result-card-links a:hover { background: var(--teal-light); }
 .result-card-body { padding: 10px 14px; }
-.test-tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.test-tag { font-size: 12px; padding: 3px 10px; border-radius: 10px; background: var(--teal-light); color: var(--teal); border: 1px solid var(--teal-border); }
-.test-tag.iso { background: var(--amber-light); color: var(--amber); border-color: #ef9f27; }
+.test-tags { display: flex; flex-direction: column; }
+.test-tag { font-size: 12px; padding: 6px 0 6px 10px; border-bottom: 1px solid var(--border); border-left: 2px solid transparent; display: flex; flex-direction: column; gap: 1px; }
+.test-tag:last-child { border-bottom: none; }
+.test-tag .t-zh { color: var(--text); }
+.test-tag .t-en { color: var(--text2); font-size: 11px; }
+.test-tag.iso { border-left-color: var(--teal-border); }
 .no-test { font-size: 12px; color: var(--text3); font-style: italic; }
+.synth { border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 14px; overflow: hidden; }
+.synth-head { padding: 9px 14px; background: var(--surface2); font-size: 13px; font-weight: 600; color: var(--text); display: flex; justify-content: space-between; align-items: center; }
+.synth-head .synth-sub { font-size: 11px; font-weight: 400; color: var(--text3); }
+.synth-body { overflow-x: auto; }
+.ov-table, .mx-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ov-table th, .ov-table td, .mx-table th, .mx-table td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ov-table tr:last-child td, .mx-table tr:last-child td { border-bottom: none; }
+.ov-table th, .mx-table th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text3); font-weight: 600; background: var(--surface); }
+.ov-k, .mx-knum { font-family: var(--mono); color: var(--teal); font-weight: 600; white-space: nowrap; }
+.ov-table a { color: var(--teal); text-decoration: none; }
+.mx-cat td { font-size: 10px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface2); padding: 5px 10px; }
+.mx-item .mx-zh { color: var(--text); }
+.mx-item .mx-en { color: var(--text3); font-size: 11px; display: block; }
+.mx-cell { text-align: center; }
+.mx-cell.yes { color: var(--teal); font-weight: 700; }
+.mx-cell.no { color: var(--border2); }
+.mx-cov { font-size: 11px; color: var(--text2); text-align: center; white-space: nowrap; }
+.hist-bar { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+.hist-item { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+.hist-item:hover { background: var(--surface2); border-color: var(--border2); }
+.hist-item-top { display: flex; gap: 10px; align-items: center; font-size: 11px; }
+.hist-pc { font-family: var(--mono); color: var(--text2); }
+.hist-date { color: var(--text3); margin-left: auto; }
+.hist-zh { font-size: 13px; color: var(--text); font-weight: 500; margin-top: 2px; }
+.hist-en { font-size: 11px; color: var(--text2); line-height: 1.3; }
+.hist-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.cache-badge { font-size: 10px; color: var(--text2); border: 1px solid var(--border2); border-radius: 4px; padding: 1px 6px; white-space: nowrap; align-self: flex-start; margin-left: 8px; }
 .parsing-label { font-size: 12px; color: var(--text3); animation: pulse 1.2s infinite; }
 @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 
@@ -323,6 +353,17 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
   <main class="main">
     <h1 class="page-title">FDA 510(k) Performance Test Explorer</h1>
     <p class="page-sub">依器材類型查詢所有已清關產品，並擷取 510(k) Summary 的功能性測試項目。</p>
+
+    <div class="panel" id="history-panel">
+      <div class="hist-bar" onclick="toggleHistory()">
+        <span class="panel-title" style="margin:0;">已分析紀錄 <span id="hist-count" class="synth-sub" style="font-weight:400;color:var(--text3);"></span></span>
+        <span id="hist-caret" style="color:var(--text3);">▸</span>
+      </div>
+      <div id="hist-body" style="display:none; margin-top:10px;">
+        <input type="text" id="hist-search" placeholder="搜尋 代碼 / 中文名 / 英文名 / 廠牌 / 型號…" oninput="renderHistory()" style="width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface2); color:var(--text); font-size:13px; box-sizing:border-box;" />
+        <div id="hist-list" style="margin-top:8px;"></div>
+      </div>
+    </div>
 
     <!-- Step 1 -->
     <div class="panel">
@@ -827,6 +868,28 @@ function filterByCompany() { applyAllFilters(); }
 
 const zhNameCache = {};
 
+// ─── Local report cache (avoid re-spending API) ───────────────────────
+const STORE_KEY = "fda510k_reports";
+function loadReports() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); } catch { return {}; } }
+function saveReport(entry) {
+  const all = loadReports();
+  all[entry.k_number] = entry;
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(all)); }
+  catch (e) { console.warn("report cache write failed (storage full?)", e); }
+}
+function getCachedReport(knum) { return loadReports()[knum] || null; }
+function extractModels(name) {
+  if (!name) return [];
+  const m = name.match(/\b[A-Z]{0,4}\d{3,}[A-Z0-9\-]*\b/g) || [];
+  return [...new Set(m)].slice(0, 12);
+}
+function refreshHistCount() {
+  const el = document.getElementById("hist-count");
+  if (!el) return;
+  const n = Object.keys(loadReports()).length;
+  el.textContent = n ? `(${n} 筆)` : "(尚無)";
+}
+
 function normalizeDeviceName(name) {
   // FDA often uses "NEEDLE, ASPIRATION BIOPSY" format — reorder to natural English
   name = name.replace(/[™®©]/g, "").trim();
@@ -946,6 +1009,19 @@ async function analyzeSelected() {
     setStatus("analyze-status", `分析 ${knum}（${i + 1}/${knums.length}）…`);
     $("prog-bar").style.width = Math.round(((i + 1) / knums.length) * 100) + "%";
 
+    // ── cache hit? reuse, skip API ──
+    const cached = getCachedReport(knum);
+    if (cached && cached.tests && cached.tests.length) {
+      setStatus("analyze-status", `${knum} 取自本機快取（未花費 API）…`);
+      const card = createPlaceholderCard(item);
+      $("test-results").insertBefore(card, $("test-results").firstChild);
+      renderCardTests(card, cached.tests, knum, item);
+      const hdr = card.querySelector(".result-card-header");
+      if (hdr) hdr.insertAdjacentHTML("beforeend", `<span class="cache-badge" title="取自本機快取，未花費 API">快取</span>`);
+      analysisResults.push({ ...cached });
+      continue;
+    }
+
     // placeholder card while loading
     const card = createPlaceholderCard(item);
     $("test-results").insertBefore(card, $("test-results").firstChild);
@@ -959,7 +1035,20 @@ async function analyzeSelected() {
         tests = await analyzeViaName(knum, item, key);
       }
       renderCardTests(card, tests, knum, item);
-      analysisResults.push({ k_number: knum, device_name: item?.device_name || "", applicant: item?.applicant || "", decision_date: (item?.decision_date || "").substring(0, 10), tests, pdf_url: kToPdfUrl(knum) });
+      const entry = {
+        k_number: knum,
+        product_code: selectedCode || "",
+        device_name: item?.device_name || "",
+        device_name_zh: zhNameCache[knum] || "",
+        applicant: item?.applicant || "",
+        models: extractModels(item?.device_name || ""),
+        decision_date: (item?.decision_date || "").substring(0, 10),
+        tests,
+        pdf_url: kToPdfUrl(knum),
+        analyzed_at: new Date().toISOString()
+      };
+      if (tests.length) saveReport(entry);
+      analysisResults.push(entry);
     } catch(e) {
       renderCardError(card, e.message);
       analysisResults.push({ k_number: knum, device_name: item?.device_name || "", applicant: "", decision_date: "", tests: [], error: e.message });
@@ -969,6 +1058,8 @@ async function analyzeSelected() {
   setStatus("analyze-status", `完成 ${knums.length} 筆`, "ok");
   $("prog-wrap").style.display = "none";
   $("btn-analyze").disabled = false;
+  await buildSynthesis(key);
+  refreshHistCount();
   if (analysisResults.some(r => r.tests.length)) $("export-row").style.display = "flex";
 }
 
@@ -1085,15 +1176,162 @@ function renderCardTests(card, tests, knum, item) {
   const tags = tests.map(t => {
     const en = typeof t === "object" ? (t.en || "") : t;
     const zh = typeof t === "object" ? (t.zh || "") : "";
-    const hasStd = /ISO|ASTM|IEC|EN\s?[\d]|AAMI/i.test(en);
-    const label = zh ? `${zh}<span style="opacity:0.6; font-size:11px; margin-left:4px;">${en}</span>` : en;
-    return `<span class="test-tag${hasStd ? " iso" : ""}">${label}</span>`;
+    const hasStd = /ISO|ASTM|IEC|EN\s?\d|AAMI/i.test(en);
+    return `<div class="test-tag${hasStd ? " iso" : ""}">`
+      + `<span class="t-zh">${zh || en}</span>`
+      + (zh && en ? `<span class="t-en">${en}</span>` : "")
+      + `</div>`;
   }).join("");
   body.innerHTML = `<div class="test-tags">${tags}</div>`;
 }
 
 function renderCardError(card, msg) {
   card.querySelector(".result-card-body").innerHTML = `<div class="no-test" style="color:var(--red)">錯誤：${msg}</div>`;
+}
+
+// ─── Consolidated synthesis across selected devices ───────────────────
+async function buildSynthesis(key) {
+  const devs = analysisResults.filter(r => r.tests && r.tests.length);
+  const oldB = document.getElementById("synth-block");
+  if (oldB) oldB.remove();
+  if (devs.length < 1) return;
+
+  const block = document.createElement("div");
+  block.id = "synth-block";
+
+  const ovRows = devs.map(r => `
+    <tr>
+      <td class="ov-k">${r.k_number}</td>
+      <td>${r.device_name || ""}</td>
+      <td>${r.applicant || ""}</td>
+      <td style="white-space:nowrap;">${r.decision_date || ""}</td>
+      <td><a href="${r.pdf_url}" target="_blank" rel="noopener">PDF ↗</a></td>
+    </tr>`).join("");
+
+  block.innerHTML = `
+    <div class="synth">
+      <div class="synth-head">器材總覽 <span class="synth-sub">${devs.length} 筆</span></div>
+      <div class="synth-body">
+        <table class="ov-table">
+          <thead><tr><th>510(k)</th><th>器材名稱</th><th>申請廠商</th><th>取證日期</th><th></th></tr></thead>
+          <tbody>${ovRows}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="synth" id="synth-matrix">
+      <div class="synth-head">驗證項目綜整 <span class="synth-sub">跨 ${devs.length} 筆去重比對</span></div>
+      <div class="synth-body"><div class="parsing-label" style="padding:10px 14px;">綜整驗證項目中…</div></div>
+    </div>`;
+  $("test-results").insertBefore(block, $("test-results").firstChild);
+
+  if (devs.length < 2) {
+    const mb = document.querySelector("#synth-matrix .synth-body");
+    if (mb) mb.innerHTML = `<div class="no-test" style="padding:10px 14px;">需選 2 筆以上才能比對綜整</div>`;
+    return;
+  }
+
+  try {
+    const payload = devs.map(r => ({
+      k: r.k_number,
+      tests: r.tests.map(t => typeof t === "object" ? (t.zh ? `${t.zh} / ${t.en}` : (t.en || "")) : t)
+    }));
+    const prompt = `You are consolidating FDA 510(k) performance/verification test items across multiple medical devices for a competitive test-plan analysis.
+
+Input (each device with its extracted test list):
+${JSON.stringify(payload, null, 2)}
+
+Merge semantically-equivalent tests across devices into ONE canonical item (e.g. "Needle sharpness" and "Needle tip sharpness and penetration force" are the same item). Group canonical items into sensible categories such as 機械性能, 尺寸/外觀, 生物相容性, 滅菌, 包裝, 老化/儲架壽命, 模擬使用, 其他. For each canonical item, list which device k_numbers include it, and the standard number if any (e.g. ISO 10993-5, ASTM F1980).
+
+Respond ONLY with JSON, no markdown fences:
+{"categories":[{"name":"機械性能 Mechanical","items":[{"zh":"針尖鋒利度與穿刺力","en":"Needle tip sharpness and penetration force","standard":"","devices":["K180450","K252795"]}]}]}`;
+    const out = await claudeCall(prompt, key);
+    renderMatrix(out, devs);
+  } catch(e) {
+    const mb = document.querySelector("#synth-matrix .synth-body");
+    if (mb) mb.innerHTML = `<div class="no-test" style="padding:10px 14px;color:var(--red)">綜整失敗：${e.message}（個別清單仍在下方）</div>`;
+  }
+}
+
+function renderMatrix(data, devs) {
+  const mb = document.querySelector("#synth-matrix .synth-body");
+  if (!mb) return;
+  const cats = (data && data.categories) || [];
+  if (!cats.length) { mb.innerHTML = `<div class="no-test" style="padding:10px 14px;">無法綜整出結構化結果</div>`; return; }
+  const heads = devs.map(d => `<th class="mx-knum" title="${(d.device_name || "").replace(/"/g, "")}">${d.k_number}</th>`).join("");
+  let rows = "";
+  cats.forEach(cat => {
+    rows += `<tr class="mx-cat"><td colspan="${devs.length + 2}">${cat.name || ""}</td></tr>`;
+    (cat.items || []).forEach(it => {
+      const dev = it.devices || [];
+      const cov = dev.length;
+      const cells = devs.map(d => {
+        const has = dev.includes(d.k_number);
+        return `<td class="mx-cell ${has ? "yes" : "no"}">${has ? "✓" : "·"}</td>`;
+      }).join("");
+      const enLine = (it.en && it.zh) ? `<span class="mx-en">${it.en}${it.standard ? ` · ${it.standard}` : ""}</span>`
+                   : (it.standard ? `<span class="mx-en">${it.standard}</span>` : "");
+      rows += `<tr>
+        <td class="mx-item"><span class="mx-zh">${it.zh || it.en || ""}</span>${enLine}</td>
+        ${cells}
+        <td class="mx-cov">${cov}/${devs.length}</td>
+      </tr>`;
+    });
+  });
+  mb.innerHTML = `<table class="mx-table">
+    <thead><tr><th>驗證項目</th>${heads}<th>涵蓋</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ─── Retrieval / history ──────────────────────────────────────────────
+function toggleHistory() {
+  const b = $("hist-body"), c = $("hist-caret");
+  const open = b.style.display === "none";
+  b.style.display = open ? "block" : "none";
+  c.textContent = open ? "▾" : "▸";
+  if (open) renderHistory();
+}
+function renderHistory() {
+  const list = $("hist-list");
+  if (!list) return;
+  const q = ($("hist-search") ? $("hist-search").value.trim().toLowerCase() : "");
+  const all = Object.values(loadReports()).sort((a, b) => (b.analyzed_at || "").localeCompare(a.analyzed_at || ""));
+  if (!all.length) { list.innerHTML = `<div class="no-test">尚無已分析紀錄。分析後會自動存於本機,可在此搜尋回叫。</div>`; return; }
+  const hit = all.filter(e => {
+    if (!q) return true;
+    const hay = [e.product_code, e.device_name_zh, e.device_name, e.applicant, (e.models || []).join(" "), e.k_number].join(" ").toLowerCase();
+    return q.split(/\s+/).every(tok => hay.includes(tok));
+  });
+  if (!hit.length) { list.innerHTML = `<div class="no-test">無符合「${q}」的紀錄</div>`; return; }
+  list.innerHTML = hit.map(e => {
+    const models = (e.models && e.models.length) ? ` · 型號 ${e.models.slice(0, 4).join(", ")}${e.models.length > 4 ? "…" : ""}` : "";
+    return `<div class="hist-item" onclick="loadHistory('${e.k_number}')">
+      <div class="hist-item-top">
+        <span class="ov-k">${e.k_number}</span>
+        <span class="hist-pc">${e.product_code || ""}</span>
+        <span class="hist-date">${(e.analyzed_at || "").substring(0, 10)}</span>
+      </div>
+      <div class="hist-zh">${e.device_name_zh || ""}</div>
+      <div class="hist-en">${e.device_name || ""}</div>
+      <div class="hist-meta">${e.applicant || ""}${models} · ${e.tests ? e.tests.length : 0} 項</div>
+    </div>`;
+  }).join("");
+}
+function loadHistory(knum) {
+  const e = getCachedReport(knum);
+  if (!e) return;
+  unlockPanel("panel3");
+  $("test-results").innerHTML = "";
+  analysisResults = [{ ...e }];
+  const item = { k_number: e.k_number, device_name: e.device_name, applicant: e.applicant, decision_date: e.decision_date };
+  const card = createPlaceholderCard(item);
+  $("test-results").insertBefore(card, $("test-results").firstChild);
+  renderCardTests(card, e.tests || [], knum, item);
+  const hdr = card.querySelector(".result-card-header");
+  if (hdr) hdr.insertAdjacentHTML("beforeend", `<span class="cache-badge" title="本機快取回叫,未花費 API">快取</span>`);
+  setStatus("analyze-status", `已從本機快取載入 ${knum}(未花費 API)`, "ok");
+  $("export-row").style.display = "flex";
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 // ─── Export ────────────────────────────────────────────────
@@ -1281,6 +1519,7 @@ if (sessionStorage.getItem("fda510k_auth") === "1") {
 })();
 $("api-key").addEventListener("change", () => localStorage.setItem("fda_api_key", $("api-key").value.trim()));
 $("proxy-url").addEventListener("change", () => localStorage.setItem("fda_proxy", $("proxy-url").value.trim()));
+refreshHistCount();
 </script>
 </body>
 </html>
