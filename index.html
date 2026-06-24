@@ -809,10 +809,12 @@ function applyAllFilters() {
       ? true
       : [...activeCompanies].some(co => appName.includes(co.toLowerCase())) || (custom && appName.includes(custom));
 
-    // Class filter
+    // Class filter (510k records carry class under openfda.device_class, often an array)
+    const rawCls = r.device_class != null ? r.device_class : r.openfda?.device_class;
+    const recClass = String(Array.isArray(rawCls) ? (rawCls[0] || "") : (rawCls || ""));
     const classOk = !activeFilters.class.size
       ? true
-      : activeFilters.class.has(String(r.device_class || ""));
+      : activeFilters.class.has(recClass);
 
     // Doc type filter
     const docVal = (r.statement_or_summary || "").trim();
