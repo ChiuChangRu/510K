@@ -1597,7 +1597,7 @@ $("kw-input").addEventListener("keydown", e => { if (e.key === "Enter") searchCo
 // ─── Detail Panel ─────────────────────────────────────────
 let detailItem = null;
 
-// 共用：把英文欄位丟給 MyMemory 翻成中文，顯示在指定的對照行裡
+// 共用：把英文欄位丟給 MyMemory 翻成中文，顯示在指定的對照行裡（小字參考列樣式，帶「中譯參考：」前綴）
 async function setRefTranslation(elId, enText) {
   const el = $(elId);
   if (!el || !enText) { if (el) el.style.display = "none"; return; }
@@ -1612,6 +1612,21 @@ async function setRefTranslation(elId, enText) {
   }
 }
 
+// 共用：同上，但不加前綴、純粹填入翻譯結果——給 .detail-zh 這種「翻譯本身就是主要顯示內容」的欄位用
+async function setPlainTranslation(elId, enText) {
+  const el = $(elId);
+  if (!el || !enText) { if (el) el.style.display = "none"; return; }
+  el.style.display = "block";
+  el.textContent = "翻譯中…";
+  try {
+    const zh = await myMemoryTranslate(enText);
+    if (zh) { el.textContent = zh; }
+    else { el.style.display = "none"; }
+  } catch {
+    el.style.display = "none";
+  }
+}
+
 async function openDetail(item) {
   detailItem = item;
   $("detail-empty").style.display = "none";
@@ -1620,11 +1635,23 @@ async function openDetail(item) {
 
   const knum = item.k_number || "";
   const date = (item.decision_date || "").substring(0, 10);
-  const zh = zhNameCache[knum] || ZH_MAP[selectedCode] || "";
 
   $("d-knum").textContent = knum;
   $("d-name").textContent = item.device_name || "";
-  $("d-zh").textContent = zh;
+
+  // Device Name 中文對照：優先用已有的 zhNameCache（Step 2 背景翻譯已完成就不重複花一次翻譯），
+  // 沒有才即時呼叫 setRefTranslation，不再讓使用者賭背景翻譯有沒有跑完
+  const cachedZh = zhNameCache[knum] || ZH_MAP[selectedCode] || "";
+  if (cachedZh) {
+    $("d-zh").textContent = cachedZh;
+    $("d-zh").style.display = "block";
+  } else if (item.device_name) {
+    setPlainTranslation("d-zh", item.device_name);
+  } else {
+    $("d-zh").textContent = "";
+    $("d-zh").style.display = "none";
+  }
+
   $("d-applicant").textContent = item.applicant || "—";
   $("d-date").textContent = date || "—";
   $("d-class").textContent = item.device_class ? `Class ${item.device_class}` : "—";
