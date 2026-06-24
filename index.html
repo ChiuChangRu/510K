@@ -264,6 +264,7 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
 .detail-section:last-child { border-bottom: none; }
 .detail-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text3); margin-bottom: 8px; }
 .detail-zh-ref { font-size: 12px; color: var(--text2); margin-top: 2px; margin-bottom: 4px; padding-left: 2px; border-left: 2px solid var(--border2); padding-left: 6px; }
+.zh-ref-err { color: var(--amber) !important; }
 .detail-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; gap: 8px; }
 .detail-row .label { color: var(--text2); flex-shrink: 0; }
 .detail-row .value { color: var(--text); text-align: right; font-family: var(--mono); font-size: 12px; }
@@ -362,6 +363,14 @@ select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(
       <div class="proxy-note">
         部署 <a href="#" onclick="showProxyHelp()">Cloudflare Worker</a> 後貼上 URL。<br>
         未設定時 AI 以器材名稱推斷測試項目。
+      </div>
+
+      <div class="config-label" style="margin-top:12px;">MyMemory Email（選填，提升翻譯額度）</div>
+      <div class="config-input-wrap">
+        <input type="text" id="mm-email" placeholder="your@email.com" autocomplete="off" />
+      </div>
+      <div class="proxy-note">
+        中文翻譯用的 MyMemory 免費額度：匿名 5000 字/天，填 email 提升到 50000 字/天（官方允許，不驗證、不會收信）。中文欄位顯示「額度已用完」就是填這裡。
       </div>
     </div>
   </aside>
@@ -958,17 +967,29 @@ function normalizeDeviceName(name) {
   return name;
 }
 
+function getMyMemoryEmail() { return ($("mm-email") ? $("mm-email").value.trim() : ""); }
+
+// 回傳 { text, reason } 而不是裸字串：reason 讓上層可以顯示「為什麼沒翻到」，不再默默吃掉錯誤
 async function myMemoryTranslate(text) {
   const normalized = normalizeDeviceName(text);
+  const email = getMyMemoryEmail();
+  let url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized.substring(0, 200))}&langpair=en|zh-TW`;
+  if (email) url += `&de=${encodeURIComponent(email)}`;
   try {
-    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized.substring(0, 200))}&langpair=en|zh-TW`);
+    const r = await fetch(url);
     const d = await r.json();
     if (d.responseStatus === 200) {
       const t = (d.responseData?.translatedText || "").trim();
-      if (t && !/PLEASE SELECT|MYMEMORY|Usage/i.test(t)) return t;
+      if (t && /MYMEMORY/i.test(t)) {
+        return { text: "", reason: email ? "MyMemory 額度已用完（已含 email，仍超過 50000 字/天）" : "MyMemory 匿名額度已用完（5000 字/天）— 填 email 可提升到 50000 字/天" };
+      }
+      if (t && !/PLEASE SELECT|Usage/i.test(t)) return { text: t, reason: "" };
+      return { text: "", reason: "MyMemory 回應格式異常" };
     }
-  } catch(e) {}
-  return "";
+    return { text: "", reason: `MyMemory 回應狀態 ${d.responseStatus}` };
+  } catch(e) {
+    return { text: "", reason: "MyMemory 連線失敗：" + e.message };
+  }
 }
 
 async function translatePageNames(slice) {
@@ -978,7 +999,7 @@ async function translatePageNames(slice) {
   for (const item of toTranslate) {
     const name = (item.device_name || "").replace(/[™®©]/g, "").trim();
     if (!name) continue;
-    const zh = await myMemoryTranslate(name);
+    const { text: zh } = await myMemoryTranslate(name);
     zhNameCache[item.k_number] = zh;
     // Update DOM if already rendered
     const pendingEl = document.getElementById(`zh-${item.k_number}`);
@@ -1604,11 +1625,12 @@ async function setRefTranslation(elId, enText) {
   el.style.display = "block";
   el.textContent = "翻譯中…";
   try {
-    const zh = await myMemoryTranslate(enText);
-    el.textContent = zh ? `中譯參考：${zh}` : "（翻譯無回應）";
-    if (!zh) el.style.display = "none";
-  } catch {
-    el.style.display = "none";
+    const { text: zh, reason } = await myMemoryTranslate(enText);
+    if (zh) { el.textContent = `中譯參考：${zh}`; el.classList.remove("zh-ref-err"); }
+    else { el.textContent = `（${reason || "翻譯無回應"}）`; el.classList.add("zh-ref-err"); }
+  } catch(e) {
+    el.textContent = `（翻譯發生例外：${e.message}）`;
+    el.classList.add("zh-ref-err");
   }
 }
 
@@ -1619,11 +1641,12 @@ async function setPlainTranslation(elId, enText) {
   el.style.display = "block";
   el.textContent = "翻譯中…";
   try {
-    const zh = await myMemoryTranslate(enText);
-    if (zh) { el.textContent = zh; }
-    else { el.style.display = "none"; }
-  } catch {
-    el.style.display = "none";
+    const { text: zh, reason } = await myMemoryTranslate(enText);
+    if (zh) { el.textContent = zh; el.classList.remove("zh-ref-err"); }
+    else { el.textContent = `（${reason || "翻譯無回應"}）`; el.classList.add("zh-ref-err"); }
+  } catch(e) {
+    el.textContent = `（翻譯發生例外：${e.message}）`;
+    el.classList.add("zh-ref-err");
   }
 }
 
@@ -1852,9 +1875,11 @@ if (sessionStorage.getItem("fda510k_auth") === "1") {
 (function() {
   const k = localStorage.getItem("fda_api_key"); if (k) $("api-key").value = k;
   const p = localStorage.getItem("fda_proxy"); if (p) $("proxy-url").value = p;
+  const e = localStorage.getItem("fda_mm_email"); if (e) $("mm-email").value = e;
 })();
 $("api-key").addEventListener("change", () => localStorage.setItem("fda_api_key", $("api-key").value.trim()));
 $("proxy-url").addEventListener("change", () => localStorage.setItem("fda_proxy", $("proxy-url").value.trim()));
+$("mm-email").addEventListener("change", () => localStorage.setItem("fda_mm_email", $("mm-email").value.trim()));
 refreshHistCount();
 </script>
 </body>
