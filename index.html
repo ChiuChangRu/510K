@@ -1924,23 +1924,44 @@ async function analyzeSingle() {
   }
 }
 // ─── Login ────────────────────────────────────────────────
-const PASS_HASH = "3ebfff9091f45a3b71ed6d76212914d125a1d751900a26ef38e619c7247d8b4f";
-
-async function sha256(str) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,"0")).join("");
-}
+// 密碼驗證已移到 Cloudflare Worker 端（/auth），不再把雜湊值放在這個公開的 HTML 裡。
+// 下面這個網址要填你實際部署的 worker 網址（跟 PDF Proxy 同一個 worker）。
+// 用固定常數而不是讀側邊欄的 Proxy URL 欄位，是因為登入畫面會整個蓋住側邊欄，
+// 第一次使用、localStorage 還是空的人根本看不到也填不了那個欄位。
+const AUTH_WORKER_URL = "PASTE_YOUR_WORKER_URL_HERE"; // 例如 https://fda-proxy.yourname.workers.dev
 
 async function doLogin() {
   const pw = $("pw-input").value;
-  const hash = await sha256(pw);
-  if (hash === PASS_HASH) {
-    sessionStorage.setItem("fda510k_auth", "1");
-    $("login-overlay").style.display = "none";
-  } else {
-    $("pw-err").textContent = "密碼錯誤，請重試";
-    $("pw-input").value = "";
-    $("pw-input").focus();
+  const btn = document.querySelector(".login-btn");
+  const errEl = $("pw-err");
+  errEl.textContent = "";
+  if (!pw) return;
+
+  if (!AUTH_WORKER_URL || AUTH_WORKER_URL.includes("PASTE_YOUR")) {
+    errEl.textContent = "尚未設定驗證伺服器網址（AUTH_WORKER_URL），請聯絡管理員";
+    return;
+  }
+
+  btn.disabled = true; const origText = btn.textContent; btn.textContent = "驗證中…";
+  try {
+    const res = await fetch(`${AUTH_WORKER_URL.replace(/\/$/, "")}/auth`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: pw })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.ok) {
+      sessionStorage.setItem("fda510k_auth", "1");
+      $("login-overlay").style.display = "none";
+    } else {
+      errEl.textContent = data.error ? `驗證失敗：${data.error}` : "密碼錯誤，請重試";
+      $("pw-input").value = "";
+      $("pw-input").focus();
+    }
+  } catch (e) {
+    errEl.textContent = "無法連線到驗證伺服器，請檢查網路或聯絡管理員";
+  } finally {
+    btn.disabled = false; btn.textContent = origText;
   }
 }
 
