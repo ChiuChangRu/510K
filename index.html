@@ -1124,10 +1124,10 @@ async function analyzeViaName(knum, item, key) {
 
 Based on your knowledge of typical 510(k) performance testing for this device type, list the functional and performance tests. Include ISO/ASTM standard numbers where applicable.
 
-Respond ONLY with a JSON array of objects with "en" and "zh" keys. No explanation, no markdown fences.
+CRITICAL: Output ONLY the raw JSON array. Do not write any introduction, explanation, caveat, or markdown fence — your entire response must start with "[" and end with "]".
 Example: [{"en":"Tensile strength","zh":"拉伸強度"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Dimensional verification","zh":"尺寸驗證"}]`;
 
-  return await claudeCall(prompt, key);
+  return await claudeCall(prompt, key, 3000);
 }
 
 async function claudeExtract(pdfText, deviceName, key) {
@@ -1141,19 +1141,19 @@ ${excerpt}
 
 Extract ALL functional/performance tests mentioned. Include ISO and ASTM standard numbers exactly as written. If the document lists a test table, extract every row.
 
-Respond ONLY with a JSON array of objects with "en" (English test name) and "zh" (Traditional Chinese translation) keys. No explanation, no markdown fences.
+CRITICAL: Output ONLY the raw JSON array. Do not write any introduction, explanation, caveat, or markdown fence — your entire response must start with "[" and end with "]".
 Example: [{"en":"Tensile strength (ASTM F2132)","zh":"拉伸強度 (ASTM F2132)"},{"en":"ISO 10993-5 Cytotoxicity","zh":"ISO 10993-5 細胞毒性"},{"en":"Sterility (ISO 11135)","zh":"無菌性驗證 (ISO 11135)"}]`;
 
-  return await claudeCall(prompt, key);
+  return await claudeCall(prompt, key, 3000);
 }
 
-async function claudeCall(prompt, key) {
+async function claudeCall(prompt, key, maxTokens = 2000) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 1000,
+      max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -1163,9 +1163,56 @@ async function claudeCall(prompt, key) {
   }
   const data = await res.json();
   const raw = data.content?.map(c => c.text || "").join("") || "[]";
+  return parseJsonLoose(raw);
+}
+
+// ─── Robust JSON salvage ────────────────────────────────────
+// Handles: clean JSON / JSON wrapped in markdown fences / JSON with
+// leading explanatory prose / JSON truncated mid-object due to max_tokens.
+function parseJsonLoose(raw) {
   const clean = raw.replace(/```json|```/g, "").trim();
-  try { return JSON.parse(clean); }
-  catch { return raw.split("\n").map(l => l.replace(/^[-"*\d.]+\s*/, "").replace(/",?$/, "").trim()).filter(Boolean); }
+
+  // 1) try parsing as-is
+  try { return JSON.parse(clean); } catch {}
+
+  // 2) strip any leading prose: find first [ or { and parse from there
+  const startIdx = clean.search(/[\[{]/);
+  if (startIdx === -1) return lineFallback(clean);
+  const opener = clean[startIdx];
+  let sub = clean.slice(startIdx);
+
+  try { return JSON.parse(sub); } catch {}
+
+  // 3) truncated mid-object: walk back to the last complete "}" and
+  // try closing the structure there, dropping only the unfinished tail
+  if (opener === "[") {
+    for (let i = sub.length - 1; i >= 0; i--) {
+      if (sub[i] !== "}") continue;
+      const candidate = sub.slice(0, i + 1) + "]";
+      try {
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed) && parsed.length) return parsed;
+      } catch {}
+    }
+  } else {
+    for (let i = sub.length - 1; i >= 0; i--) {
+      if (sub[i] !== "}" && sub[i] !== "]") continue;
+      const candidate = sub.slice(0, i + 1) + "}";
+      try {
+        const parsed = JSON.parse(candidate);
+        if (parsed && typeof parsed === "object") return parsed;
+      } catch {}
+    }
+  }
+
+  // 4) last resort: cleaned line list (never show raw JSON fragments)
+  return lineFallback(sub);
+}
+
+function lineFallback(text) {
+  return text.split("\n")
+    .map(l => l.replace(/^[-"*\d.\[\{]+\s*/, "").replace(/[",\]\}]+\s*$/, "").trim())
+    .filter(l => l && !/^["']?(en|zh)["']?\s*:/i.test(l) && l !== "[" && l !== "]" && l !== "{" && l !== "}");
 }
 
 // ─── Card rendering ────────────────────────────────────────
@@ -1264,9 +1311,9 @@ ${JSON.stringify(payload, null, 2)}
 
 Merge semantically-equivalent tests across devices into ONE canonical item (e.g. "Needle sharpness" and "Needle tip sharpness and penetration force" are the same item). Group canonical items into sensible categories such as 機械性能, 尺寸/外觀, 生物相容性, 滅菌, 包裝, 老化/儲架壽命, 模擬使用, 其他. For each canonical item, list which device k_numbers include it, and the standard number if any (e.g. ISO 10993-5, ASTM F1980).
 
-Respond ONLY with JSON, no markdown fences:
+Respond ONLY with JSON, no markdown fences, no explanation before or after — your entire response must start with "{" and end with "}":
 {"categories":[{"name":"機械性能 Mechanical","items":[{"zh":"針尖鋒利度與穿刺力","en":"Needle tip sharpness and penetration force","standard":"","devices":["K180450","K252795"]}]}]}`;
-    const out = await claudeCall(prompt, key);
+    const out = await claudeCall(prompt, key, 8000);
     renderMatrix(out, devs);
   } catch(e) {
     const mb = document.querySelector("#synth-matrix .synth-body");
