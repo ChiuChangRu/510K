@@ -970,7 +970,7 @@ function normalizeDeviceName(name) {
 function getMyMemoryEmail() { return ($("mm-email") ? $("mm-email").value.trim() : ""); }
 
 // 回傳 { text, reason } 而不是裸字串：reason 讓上層可以顯示「為什麼沒翻到」，不再默默吃掉錯誤
-async function myMemoryTranslate(text) {
+async function myMemoryTranslate(text, _retry = 0) {
   const normalized = normalizeDeviceName(text);
   const email = getMyMemoryEmail();
   let url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalized.substring(0, 200))}&langpair=en|zh-TW`;
@@ -985,6 +985,14 @@ async function myMemoryTranslate(text) {
       }
       if (t && !/PLEASE SELECT|Usage/i.test(t)) return { text: t, reason: "" };
       return { text: "", reason: "MyMemory 回應格式異常" };
+    }
+    // 429 = 短時間內請求太頻繁的暫時限速，跟每日字數額度是不同機制，通常等幾秒就會恢復
+    if (d.responseStatus === 429 && _retry < 2) {
+      await new Promise(res => setTimeout(res, 1500 * (_retry + 1)));
+      return myMemoryTranslate(text, _retry + 1);
+    }
+    if (d.responseStatus === 429) {
+      return { text: "", reason: "MyMemory 暫時限速（429，短時間內請求過多），等幾秒後重新點開此筆即可，跟每日額度無關" };
     }
     return { text: "", reason: `MyMemory 回應狀態 ${d.responseStatus}` };
   } catch(e) {
@@ -1007,7 +1015,7 @@ async function translatePageNames(slice) {
       pendingEl.textContent = zh;
       pendingEl.classList.remove("zh-pending");
     }
-    await new Promise(r => setTimeout(r, 120)); // ~8 req/sec, well under limit
+    await new Promise(r => setTimeout(r, 350)); // 降速，今天測試量大已撞過 429，保守一點
   }
 }
 
