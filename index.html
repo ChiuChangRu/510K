@@ -506,7 +506,7 @@ async function translateToEnglish(text, key) {
   if (!key) throw new Error("中文查詢需要填入 Anthropic API Key");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 60,
@@ -1037,7 +1037,7 @@ Example: [{"en":"Tensile strength (ASTM F2132)","zh":"拉伸強度 (ASTM F2132)"
 async function claudeCall(prompt, key) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+    headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 1000,
